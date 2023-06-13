@@ -31,11 +31,11 @@ def grab_s3_file(f, bucket='capex-rm-optimization', idx_col=None):
     return data 
 
     
-def grab_budgets():
+def grab_budgets(facilities):
     budget = pd.read_csv('budgets_2023.csv')
     # budget = grab_s3_file('budgets_2023.csv') #switch later
 
-    facilities = run_sql_query(facilities_sql)
+    # facilities = run_sql_query(facilities_sql)
     facility_data = facilities[['rd', 'fund', 'fs']]
 
     merge = pd.merge(facility_data, budget, how="left", left_on = ['rd'], right_on = 'RD')
@@ -45,18 +45,18 @@ def grab_budgets():
     
     return merge 
 
-def grab_pl():
-    pl = pd.read_csv('p&l_4_2023.csv')
-    # pl = grab_s3_file('p&l_4_2023.csv') #switch later
-    cols_to_keep = ['RD']
-    cols_to_melt = pl.columns.difference(cols_to_keep)
+# def grab_pl():
+#     pl = pd.read_csv('p&l_4_2023.csv')
+#     # pl = grab_s3_file('p&l_4_2023.csv') #switch later
+#     cols_to_keep = ['RD']
+#     cols_to_melt = pl.columns.difference(cols_to_keep)
 
-    new_pl = pd.melt(pl, id_vars=cols_to_keep, value_vars=cols_to_melt, var_name="Date", value_name="R&M")
+#     new_pl = pd.melt(pl, id_vars=cols_to_keep, value_vars=cols_to_melt, var_name="Date", value_name="R&M")
 
-    return new_pl
+#     return new_pl
 
-def remaining_facility(completed, capex=False):
-    budget = grab_budgets()
+def remaining_facility(completed, facilities, capex=False):
+    budget = grab_budgets(facilities)
 
     completed['Final Cost'] = pd.to_numeric(completed['Final Cost'], errors='coerce').fillna(0)
     if capex==False:
@@ -74,8 +74,8 @@ def remaining_facility(completed, capex=False):
 
     return merge 
 
-def remaining_fund(completed, capex=False):
-    remaining = remaining_facility(completed, capex)
+def remaining_fund(completed, facilities, capex=False):
+    remaining = remaining_facility(completed, facilities, capex)
     remaining = remaining[['fund', 'R&M budget', 'Final Cost', 'remaining_budget']]
     remaining = remaining.rename(columns = {'remaining_budget':'remaining_fund_budget'})
     fund_leftovers = remaining.groupby('fund', as_index=False).sum()

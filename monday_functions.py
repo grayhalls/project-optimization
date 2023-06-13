@@ -131,27 +131,43 @@ class Monday:
     
     def transform_dataframe(self, df):
         df.loc[:,'RD'] = df['RD'].replace("", np.nan)
-        df.loc[:,'RD'] = df['RD'].fillna(df['facility'])
+        df['RD'] = df['RD'].fillna(df['facility'])
         df = df[['region','id', 'RD', 'Item Type', 'item_name', 'Priority', 'Status', 'Open', 'Scheduled', 'Estimated Cost', 'Quoted Cost', 'Deposit Date','Deposit Amount','Final Cost']]
         df.loc[:, 'Open'] = pd.to_datetime(df['Open']).dt.date
+        df['RD'] = df['RD'].str.strip()
 
         return df
     
     def create_items_from_df(self, df, group_id):
         for _, row in df.iterrows():
+
             # Construct the item_name (you can customize this based on your needs)
-            item_name = f"{row['item_name']} - {row['facility']}"
+            item_name = f"{row['RD']} - {row['item_name']}" if 'item_name' in df.columns and 'RD' in df.columns else ""
 
             # Construct the column_values (you can customize this based on your needs)
             column_values = {
-                "column_id_1": row['column_value_1'],
-                "column_id_2": row['column_value_2'],
-                # ...
+                "name": (row['RD'] + " - " + row['item_name']) if 'RD' in df.columns and 'item_name' in df.columns else "",
+                "region": row['region'] if 'region' in df.columns else "",
+                "rd": row['RD'] if 'RD' in df.columns else "",
+                "project_id0": row['id'] if 'id' in df.columns else "",
+                "number": row['cost'] if 'cost' in df.columns and pd.notnull(row['cost']) else 0, # replace NaN with 0
+                "numbers6": row['cost_effectiveness'] if 'cost_effectiveness' in df.columns and pd.notnull(row['cost_effectiveness']) else 0, # replace NaN with 0
+                "text": row['fund'] if 'fund' in df.columns and pd.notnull(row['fund']) else "", # replace NaN with empty string
+                "numbers0": row['remaining_budget'] if 'remaining_budget' in df.columns and pd.notnull(row['remaining_budget']) else 0, # replace NaN with 0
+                "numbers_1": row['remaining_fund_budget'] if 'remaining_fund_budget' in df.columns and pd.notnull(row['remaining_fund_budget']) else 0, # replace NaN with 0
+                "exceeds_rd_budget3": str(row['exceeds_facility_budget']) if 'exceeds_facility_budget' in df.columns else "", # Exceeds RD budget
+                "exceeds_fund_budget": str(row['exceeds_fund_budget']) if 'exceeds_fund_budget' in df.columns else "" # Exceeds Fund budget
             }
 
             # Create the item
-            self.client.create_item(board_id=self.new_board_id, group_id=group_id, item_name=item_name, column_values=column_values)
-       
+            try:
+                response = self.client.items.create_item(board_id=self.new_board_id, group_id=group_id, item_name=item_name, column_values=column_values)
+            except Exception as e:
+                print(f"Error creating item: {e}")
+
+    def delete_item(self, item_id):
+        self.client.items.delete_item_by_id(item_id)
+                  
 
     
     

@@ -43,18 +43,16 @@ def calc_cost_effectiveness(df, low_base, medium_base, high_base, emergency_base
     now = date.today()
     # Calculate the number of weeks since 'Open' date
     df.loc[:,'days'] = (now - df['Open']).apply(lambda x: x.days)
-    print('1')
-    df.loc[:,'days'] = df['days'].astype(int)
-    print('2')
+    df['days'] = df['days'].astype(int)
     # Calculate the cost for each project
     df = calculate_costs(df)
-    print('3')
+    
     # Apply the function to each row of the DataFrame
     df['priority_value'] = df.apply(lambda row: priority_value(row, low_base, medium_base, high_base, emergency_base, rate, unit_value_factor), axis=1)
 
     # Calculate cost-effectiveness
-    df['cost_effectiveness'] = df['priority_value'] / df['cost']
-
+    df['cost_effectiveness'] = np.where(df['cost'] == 0, df['priority_value'], df['priority_value'] / df['cost'])
+    
     return df
 
     
