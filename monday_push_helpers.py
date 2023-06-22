@@ -12,6 +12,7 @@ buffer = 1.1 # adding a 10% buffer to costs of uncompleted projects
 pending_statuses = ['Waiting for Estimate', 'Vendor Needed','Quote Requested','New Project', 'On Hold','Gathering Scope', 'Locating Vendors']
 monday_data = Monday()
 new_board_id = os.getenv('new_board_id')
+board_id = os.getenv('board_id')
 
 # group ids
 in_process_group = 'topics'
@@ -22,7 +23,7 @@ completed_group = 'new_group51572'
 facilities = run_sql_query(facilities_sql)
 
 def calc_and_sort():
-
+    print("Fetching project board...takes up to 3 mins.")
     completed_df = monday_data.fetch_completed()
     open_df = monday_data.fetch_open_items()
 
@@ -130,12 +131,14 @@ def preprocess_df(df):
     return df
 
 def preprocessing(df_in_process, open_df, completed):
+    print('preprocessing...')
     df_in_process = preprocess_df(df_in_process)
     open_df = preprocess_df(open_df)
     completed = preprocess_df(completed)
     return df_in_process, open_df, completed 
 
 def find_existing_rows():
+    print('fetching data from Ranking board...')
     existing_items = monday_data.fetch_items_by_board_id(new_board_id)
     existing_items = existing_items['data']['boards'][0]['items']
     output = [
@@ -151,10 +154,10 @@ def find_existing_rows():
 
     return output
 
-def move_between_groups(completed_df, in_process_df, open_df):
-    # output should be a list of dictionaries with 'id', 'group', and 'status'
-    output = find_existing_rows()
-    for item in output:
+def move_between_groups(completed_df, in_process_df, open_df, existing_items):
+
+    print('moving rows to correct groups...')
+    for item in existing_items:
         project_id = str(item['id'])
         item_group = item['group']
         item_id = item['item_id']
@@ -183,9 +186,8 @@ def move_between_groups(completed_df, in_process_df, open_df):
                 row = open_df[open_df['text2'] == project_id].iloc[0]
                 monday_data.create_items_from_df(row, in_queue_group, error_group)  # replace group IDs with actual IDs
 
-def create_missing_items(completed_df, in_process_df, open_df):
-    # Get a list of existing item ids
-    existing_items = find_existing_rows()
+def create_missing_items(completed_df, in_process_df, open_df, existing_items):
+    print('adding new projects...')
     existing_ids = [str(item['id']) for item in existing_items]
 
     for df, group in [(completed_df, completed_group), 

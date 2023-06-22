@@ -86,6 +86,10 @@ class Monday:
 
         return df
     
+    def fetch_items_by_board_id(self, board):
+        items = self.client.boards.fetch_items_by_board_id(board)
+        return items
+
     def fetch_column_names(self, board_id):
         results = self.client.boards.fetch_columns_by_board_id(board_ids=board_id)
         data = results['data']['boards'][0]['columns']

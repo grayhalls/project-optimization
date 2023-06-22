@@ -3,6 +3,7 @@ import pandas as pd
 from dotenv import load_dotenv
 import os 
 
+load_dotenv()
 HOST = os.getenv("POSTGRES_HOST")
 DB = os.getenv("POSTGRES_DB")
 PORT = os.getenv("POSTGRES_PORT")
