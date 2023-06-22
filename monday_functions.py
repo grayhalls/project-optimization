@@ -145,7 +145,7 @@ class Monday:
   
         if row['status19'] == 'Complete':
             group = group_id
-        elif row['number'] == "" or row['number'] == 0 or row['numbers6']=="":
+        elif row['numbers'] == "" or row['numbers'] == 0 or row['numbers6']=="":
             group = error_group
         else:
             group = group_id
