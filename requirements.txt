@@ -2,5 +2,7 @@ boto3==1.26.145
 monday==1.3.3
 numpy==1.24.3
 pandas==2.0.1
-psycopg2==2.9.6
-python-dotenv==1.0.0
+psycopg2-binary
+python-dotenv==1.0.0 
+requests==2.26.0
+
