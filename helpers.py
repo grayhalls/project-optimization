@@ -1,5 +1,5 @@
 import pandas as pd
-from sql_queries import * 
+# from sql_queries import run_sql_query, facilities_sql 
 from dotenv import load_dotenv
 import os 
 import boto3 
@@ -85,3 +85,4 @@ def remaining_fund(completed, facilities, capex=False):
 def categorize_projects(df, pending_statuses):
     df['project_category'] = df['Status'].apply(lambda x: 'pending' if x in pending_statuses else 'in_process')
     return df
+

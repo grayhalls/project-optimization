@@ -5,6 +5,7 @@ import os
 import requests 
 import numpy as np
 from typing import List, Dict
+from collections import Counter
 
 class Monday:
     def __init__(self):
@@ -155,7 +156,7 @@ class Monday:
             group = group_id
         # Construct the column_values (you can customize this based on your needs)
         column_values = row.to_dict()
-
+        print(column_values)
         # Create the item
         try:
             print("trying to create item...")
@@ -165,7 +166,40 @@ class Monday:
                                                         create_labels_if_missing=True)
         except Exception as e:
             print(f"Error creating item: {e}")  
+    
+    def change_item_value(self, new_board_id, item_id, column_id, value):
+        self.client.items.change_item_value(new_board_id, item_id, column_id, value)
  
+    def find_existing_ids(self, new_board_id):
+        existing_items = self.client.boards.fetch_items_by_board_id(new_board_id)
+        existing_items = existing_items['data']['boards'][0]['items']
+        return [next((col["text"] for col in item["column_values"] if col["id"] == "text2"), None) for item in existing_items]
+
+    def find_duplicate_ids(self, id_list):
+        counts = Counter(id_list)
+        return [id for id, count in counts.items() if count > 1]
+
+    def delete_duplicates(self, duplicate_ids, new_board_id):
+        existing_items = self.client.boards.fetch_items_by_board_id(new_board_id)
+        existing_items = existing_items['data']['boards'][0]['items']
+
+        for item in existing_items:
+            id = next((col["text"] for col in item["column_values"] if col["id"] == "text2"), None)
+            item_id = item['id']
+
+            if id in duplicate_ids:
+                # remove this id from duplicate_ids list so we keep one of them
+                duplicate_ids.remove(id)
+
+                # delete this item
+                try:
+                    self.delete_item(item_id)
+                    print(f"Deleted item: {item_id}")
+                except Exception as e:
+                    print(f"Error deleting item: {e}")
+
+
+
     # def create_items_from_df(self, df, group_id):
     #     for _, row in df.iterrows():
 

@@ -1,4 +1,5 @@
-from monday_push_helpers import *
+from monday_push_helpers import calc_and_sort, preprocessing, find_existing_rows, \
+    move_between_groups, create_missing_items, update_existing_data
 
 
 # runs the ranking optimization over the available projects
@@ -15,5 +16,7 @@ move_between_groups(proc_completed, proc_df_in_process, proc_open_df, existing_i
 
 # looks for any items that are on the project board that are not in the Ranking board and adds them
 create_missing_items(proc_completed, proc_df_in_process, proc_open_df, existing_items)
+
+update_existing_data(proc_df_in_process, existing_items)
 
 

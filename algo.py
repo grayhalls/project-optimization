@@ -6,7 +6,7 @@ import numpy as np
 low_min, low_max = 1, 100
 medium_min, medium_max = 150, 250
 high_min, high_max = 400, 500
-emergency_min, emergency_max = 800, 1000
+emergency_min, emergency_max = 2000, 3000
 unit_value_factor = 0.5
 
 # Define the piecewise function for priority calculation
@@ -36,27 +36,6 @@ def priority_value(row):
     #     scaling *= (1 + row['unit_value'] * unit_value_factor)
     
     return scaling 
-
-# def priority_value(row, low_base, medium_base, high_base, emergency_base, rate, unit_value_factor):
-#     # Get the base priority
-#     if row['Priority'] == 'Low':
-#         base_priority = low_base
-#     elif row['Priority'] == 'Medium':
-#         base_priority = medium_base
-#     elif row['Priority'] == 'High':
-#         base_priority = high_base
-#     elif row['Priority'] == 'EMERGENCY':
-#         base_priority = emergency_base
-#     else:
-#         return np.nan  # return NaN for any other status
-
-#     # If the project is unit-specific, multiply the base priority by a factor that reflects the unit value
-#     # if row['Item Type'] == 'Unit':
-#     #     base_priority *= (1 + row['unit_value'] * unit_value_factor)
-
-#     # Return the priority value
-#     return base_priority * np.exp(rate * row['days'])
-
 
 def find_cost(row):
     if pd.notnull(row['Final Cost']) and row['Final Cost'] != "":
@@ -95,4 +74,23 @@ def calc_cost_effectiveness(df):
     df['cost_effectiveness'] = df['cost_effectiveness'].round(2)
     return df
 
-    
+
+# def priority_value(row, low_base, medium_base, high_base, emergency_base, rate, unit_value_factor):
+#     # Get the base priority
+#     if row['Priority'] == 'Low':
+#         base_priority = low_base
+#     elif row['Priority'] == 'Medium':
+#         base_priority = medium_base
+#     elif row['Priority'] == 'High':
+#         base_priority = high_base
+#     elif row['Priority'] == 'EMERGENCY':
+#         base_priority = emergency_base
+#     else:
+#         return np.nan  # return NaN for any other status
+
+#     # If the project is unit-specific, multiply the base priority by a factor that reflects the unit value
+#     # if row['Item Type'] == 'Unit':
+#     #     base_priority *= (1 + row['unit_value'] * unit_value_factor)
+
+#     # Return the priority value
+#     return base_priority * np.exp(rate * row['days'])
