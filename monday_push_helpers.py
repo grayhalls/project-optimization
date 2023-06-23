@@ -1,8 +1,8 @@
 import pandas as pd
-from monday_functions import * 
-from sql_queries import *
-from helpers import *
-from algo import *
+from monday_functions import Monday
+from sql_queries import run_sql_query, facilities_sql 
+from helpers import remaining_facility, remaining_fund, categorize_projects
+from algo import calculate_costs, calc_cost_effectiveness
 import os
 from dotenv import load_dotenv
 
@@ -10,6 +10,8 @@ load_dotenv()
 # update variables as needed - scaling variables in algo.py
 buffer = 1.1 # adding a 10% buffer to costs of uncompleted projects
 pending_statuses = ['Waiting for Estimate', 'Vendor Needed','Quote Requested','New Project', 'On Hold','Gathering Scope', 'Locating Vendors']
+# checks the values and updates changes for these columns
+columns_to_check = ['numbers', 'numbers6', 'numbers0', 'numbers_1', 'status19', 'status9', 'numbers1','numbers05', 'numbers_15']
 monday_data = Monday()
 new_board_id = os.getenv('new_board_id')
 board_id = os.getenv('board_id')
@@ -117,7 +119,7 @@ def preprocess_df(df):
         df['name'] = df['rd'] + " - " + df['item_name']
     else:
         df['name'] = ''
-
+    df['numbers1'] = df['numbers1'].astype(float)
     df['text2'] = df['text2'].astype(str)
     df['link'] = df.apply(lambda row: {"url": f"https://reddotstorage2.monday.com/boards/{board_id}/pulses/{row['text2']}", "text": row['name']}, axis=1)
 
@@ -142,16 +144,22 @@ def find_existing_rows():
     existing_items = monday_data.fetch_items_by_board_id(new_board_id)
     existing_items = existing_items['data']['boards'][0]['items']
     output = [
-    {
-        "id": next((col["text"] for col in item["column_values"] if col["id"] == "text2"), None),
-        "group": item['group']['title'],
-        "status": next((col["text"] for col in item["column_values"] if col["id"] == "status19"), None),
-        "item_id": item['id']
-    } 
-    for item in existing_items
-
-    ]
-
+        {
+            "id": next((col["text"] for col in item["column_values"] if col["id"] == "text2"), None),
+            "group": item['group']['title'],
+            "status19": next((col["text"] for col in item["column_values"] if col["id"] == "status19"), None),
+            "item_id": item['id'],
+            "numbers": next((col["text"] for col in item["column_values"] if col["id"] == "numbers"), None),
+            "numbers6": next((col["text"] for col in item["column_values"] if col["id"] == "numbers6"), None),
+            "numbers0": next((col["text"] for col in item["column_values"] if col["id"] == "numbers0"), None),
+            "numbers_1": next((col["text"] for col in item["column_values"] if col["id"] == "numbers_1"), None),
+            "status9": next((col["text"] for col in item["column_values"] if col["id"] == "status9"), None),
+            "numbers1": next((col["text"] for col in item["column_values"] if col["id"] == "numbers1"), None),
+            "numbers05": next((col["text"] for col in item["column_values"] if col["id"] == "numbers05"), None),
+            "numbers_15": next((col["text"] for col in item["column_values"] if col["id"] == "numbers_15"), None)
+        } 
+        for item in existing_items
+        ]
     return output
 
 def move_between_groups(completed_df, in_process_df, open_df, existing_items):
@@ -166,7 +174,7 @@ def move_between_groups(completed_df, in_process_df, open_df, existing_items):
         if project_id is not None:
         
         # Check if the item is in 'completed_df' but not marked as 'Complete' on the board
-            if item_group != 'Complete' and project_id in completed_df['text2'].values:
+            if item_group != 'Completed' and project_id in completed_df['text2'].values:
                 # Delete the item from its current group
                 monday_data.delete_item(item_id)
                 
@@ -201,6 +209,26 @@ def create_missing_items(completed_df, in_process_df, open_df, existing_items):
             # If the item id is not in the list of existing ids, create a new item
             if item_id not in existing_ids:
                 monday_data.create_items_from_df(row, group, error_group)
+
+def update_existing_data(preprocessed_df, existing_items):
+    count =1
+    # Loop through each item in preprocessed_df
+    for index, row in preprocessed_df.iterrows():
+        # Find the matching item in existing_items
+        matching_items = [item for item in existing_items if item['id'] == row['text2']]
+        # If there's a match, check if there's any difference in the columns to check
+        if matching_items:
+            matching_item = matching_items[0]
+            for column in columns_to_check:
+                # If the values are different, update the item on Monday board
+                if row[column] != matching_item[column]:
+                    # Use the 'change_item_value' function from Monday library
+                    print(column)
+                    print(f"values changed: {count}")
+                    if pd.isna(row[column]):
+                        continue  # skip this iteration if the value is nan
+                    monday_data.change_item_value(new_board_id, matching_item['item_id'], column, row[column])
+                    count += 1
 
 #still in the works
 # def process_and_send_items(df_in_process, open_df, new_board_id):
