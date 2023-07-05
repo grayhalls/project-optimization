@@ -29,6 +29,8 @@ Monday python library documentation: https://github.com/ProdPerfect/monday/tree/
 
 - [ ] sub-item api manipulation 
   - https://community.monday.com/t/updating-subitems-via-api/16626/4 
+  - turn GraphQL requests into python requests.post 
+    - Monday client may not have subitem functionality, but the monday api seems to 
 - [ ] unit values in scoring 
 
 new scoring flow will be 
