@@ -37,5 +37,7 @@ new scoring flow will be
   - parent item: something like "RD036 - Doors" 
     - with subitems like: "A036", "B54", etc 
 
-parent item (task level) – score by priority bucket 
-subitems (unit level) – score/modify by unit value 
+
+- parent item (task level) – score by priority bucket 
+
+- subitems (unit level) – score/modify by unit value 
