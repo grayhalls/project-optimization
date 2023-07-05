@@ -21,3 +21,19 @@ Variables that can be changed:
 Monday Board: https://reddotstorage2.monday.com/boards/4606795381/views/104007445
 
 Monday python library documentation: https://github.com/ProdPerfect/monday/tree/master/docs
+
+
+----- 
+
+## TODO 
+
+- [ ] sub-item api manipulation 
+  - https://community.monday.com/t/updating-subitems-via-api/16626/4 
+- [ ] unit values in scoring 
+
+new scoring flow will be 
+  - parent item: something like "RD036 - Doors" 
+    - with subitems like: "A036", "B54", etc 
+
+parent item (task level) – score by priority bucket 
+subitems (unit level) – score/modify by unit value 
