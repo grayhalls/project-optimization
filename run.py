@@ -19,4 +19,3 @@ create_missing_items(proc_completed, proc_df_in_process, proc_open_df, existing_
 
 update_existing_data(proc_df_in_process, existing_items)
 
-

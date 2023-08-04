@@ -17,10 +17,9 @@ class Monday:
         self.headers = {"Authorization" : self.api_key}
         self.url = "https://api.monday.com/v2"
 
-    def fetch_open_items(self):
+    def fetch_items(self, group_titles, all_groups=['North', 'South', 'Central', 'Complete']):
         # Calculate the total number of items
-        group_titles = ['North', 'South', 'Central']
-        total_items = self.count_items_in_groups(group_titles)
+        total_items = self.count_items_in_groups(all_groups)
         if total_items <=1000:
             limit = total_items
         else:
@@ -50,39 +49,6 @@ class Monday:
             
         df = pd.DataFrame(rows)
 
-        df = self.transform_dataframe(df)  # Moved dataframe manipulation to a separate function
-
-        return df
-    
-    def fetch_completed(self):
-        group_titles = ['North', 'South', 'Central', 'Complete']
-        total_items = self.count_items_in_groups(group_titles)
-        if total_items <=1000:
-            limit = total_items
-        else:
-            limit = 1000
-       
-        pages = (total_items // limit) + 1
-        column_names = self.fetch_column_names(self.board_id)
-        rows = []
-
-        # Fetch and process items page by page
-        for page in range(1, pages + 1):
-            try:
-                results = self.client.boards.fetch_items_by_board_id(board_ids=self.board_id, limit=limit, page=page)
-                data = results['data']['boards'][0]['items']
-            except Exception as e:
-                # the API client can raise
-                print(f"An error occurred while fetching items: {e}")
-                continue
-
-            for item in data:
-                if item['group']['title'] == 'Complete':
-                    row = self.parse_item(item, column_names)
-                    rows.append(row)
-            
-        df = pd.DataFrame(rows)
-        
         df = self.transform_dataframe(df)  # Moved dataframe manipulation to a separate function
 
         return df
@@ -147,26 +113,50 @@ class Monday:
         self.client.items.delete_item_by_id(item_id)  
 
     def create_items_from_df(self, row, group_id, error_group):
-  
-        if row['status19'] == 'Complete':
+
+        if group_id =='new_group51572' or group_id=='topics': #if completed or in process, no errors
             group = group_id
-        elif row['numbers'] == "" or row['numbers'] == 0 or row['numbers6']=="":
+        # checks if cost is blank or 0 or if cost_effectiveness is blank or if status is Escalation
+        elif row['numbers'] == "" or row['numbers'] == 0 or row['numbers6']=="" or row['status9'] == 'Escalation'\
+        or pd.isna(row['numbers']) or pd.isna(row['numbers6']):
             group = error_group
-        else:
+        else: #else goes to eligible
             group = group_id
         # Construct the column_values (you can customize this based on your needs)
         column_values = row.to_dict()
-        print(column_values)
+        
+        for key, value in column_values.items():
+            if pd.isna(value):
+                column_values[key] = None
+
+        dropdown_columns = ['exceeds_rd_budget5', 'exceeds_fund_budget2']
+
+        # Update dropdown column values
+        for dropdown in dropdown_columns:
+            if dropdown in column_values:
+                if column_values[dropdown] == False:
+                    column_values[dropdown] = "1"
+                elif column_values[dropdown] == True:
+                    column_values[dropdown] = "2"
+                else:
+                    column_values[dropdown] = "3"
+
+        # print(column_values)
         # Create the item
         try:
             print("trying to create item...")
-            self.client.items.create_item(board_id=self.new_board_id, group_id=group, 
+
+            response = self.client.items.create_item(board_id=self.new_board_id, group_id=group, 
                                                         item_name=row['name'], 
                                                         column_values=column_values,
                                                         create_labels_if_missing=True)
+            print(f'API Response: {response}')
         except Exception as e:
-            print(f"Error creating item: {e}")  
-    
+            print(f"Error creating item: {e}") 
+
+    def move_items_between_groups(self, item_id, group):
+        self.client.items.move_item_to_group(item_id, group)
+
     def change_item_value(self, new_board_id, item_id, column_id, value):
         self.client.items.change_item_value(new_board_id, item_id, column_id, value)
  
@@ -227,7 +217,75 @@ class Monday:
     #         except Exception as e:
     #             print(f"Error creating item: {e}")
 
- 
+    # def fetch_open_items(self):
+    #     # Calculate the total number of items
+    #     group_titles = ['North', 'South', 'Central']
+    #     total_items = self.count_items_in_groups(group_titles)
+    #     if total_items <=1000:
+    #         limit = total_items
+    #     else:
+    #         limit = 1000
+    #     # Determine the number of pages needed
+    #     pages = (total_items // limit) + 1
+
+    #     # Fetch column names
+    #     column_names = self.fetch_column_names(self.board_id)
+
+    #     rows = []
+
+    #     # Fetch and process items page by page
+    #     for page in range(1, pages + 1):
+    #         try:
+    #             results = self.client.boards.fetch_items_by_board_id(board_ids=self.board_id, limit=limit, page=page)
+    #             data = results['data']['boards'][0]['items']
+    #         except Exception as e:
+    #             # the API client can raise
+    #             print(f"An error occurred while fetching items: {e}")
+    #             continue
+
+    #         for item in data:
+    #             if item['group']['title'] in set(group_titles):
+    #                 row = self.parse_item(item, column_names)
+    #                 rows.append(row)
+            
+    #     df = pd.DataFrame(rows)
+
+    #     df = self.transform_dataframe(df)  # Moved dataframe manipulation to a separate function
+
+    #     return df
+    
+    # def fetch_completed(self):
+    #     group_titles = ['North', 'South', 'Central', 'Complete']
+    #     total_items = self.count_items_in_groups(group_titles)
+    #     if total_items <=1000:
+    #         limit = total_items
+    #     else:
+    #         limit = 1000
+       
+    #     pages = (total_items // limit) + 1
+    #     column_names = self.fetch_column_names(self.board_id)
+    #     rows = []
+
+    #     # Fetch and process items page by page
+    #     for page in range(1, pages + 1):
+    #         try:
+    #             results = self.client.boards.fetch_items_by_board_id(board_ids=self.board_id, limit=limit, page=page)
+    #             data = results['data']['boards'][0]['items']
+    #         except Exception as e:
+    #             # the API client can raise
+    #             print(f"An error occurred while fetching items: {e}")
+    #             continue
+
+    #         for item in data:
+    #             if item['group']['title'] == 'Complete':
+    #                 row = self.parse_item(item, column_names)
+    #                 rows.append(row)
+            
+    #     df = pd.DataFrame(rows)
+        
+    #     df = self.transform_dataframe(df)  # Moved dataframe manipulation to a separate function
+
+    #     return df
 
 
                   

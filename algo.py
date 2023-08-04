@@ -3,10 +3,10 @@ from datetime import date
 import numpy as np
 
 # Define the priority thresholds for each priority level
-low_min, low_max = 1, 100
-medium_min, medium_max = 150, 250
-high_min, high_max = 400, 500
-emergency_min, emergency_max = 2000, 3000
+low_min, low_max = 10, 300
+medium_min, medium_max = 350, 750
+high_min, high_max = 800, 1500
+emergency_min, emergency_max = 5000, 10000
 unit_value_factor = 0.5
 
 # Define the piecewise function for priority calculation
@@ -47,10 +47,11 @@ def find_cost(row):
     else:
         return 0
     
-def calculate_costs(df):
+def calculate_costs(df, buffer=1):
     df = df.copy()
     df['cost'] = df.apply(find_cost, axis=1)
     df['cost'] = pd.to_numeric(df['cost'], errors='coerce').round(2)
+    df['cost'] = df['cost']*buffer
     return df
 
 def calc_cost_effectiveness(df):

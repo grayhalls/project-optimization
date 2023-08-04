@@ -11,7 +11,7 @@ load_dotenv()
 buffer = 1.1 # adding a 10% buffer to costs of uncompleted projects
 pending_statuses = ['Waiting for Estimate', 'Vendor Needed','Quote Requested','New Project', 'On Hold','Gathering Scope', 'Locating Vendors']
 # checks the values and updates changes for these columns
-columns_to_check = ['numbers', 'numbers6', 'numbers0', 'numbers_1', 'status19', 'status9', 'numbers1','numbers05', 'numbers_15']
+columns_to_check = ['numbers', 'numbers6', 'numbers0', 'numbers_1', 'status19', 'status9', 'numbers05', 'numbers_15']
 monday_data = Monday()
 new_board_id = os.getenv('new_board_id')
 board_id = os.getenv('board_id')
@@ -19,26 +19,25 @@ board_id = os.getenv('board_id')
 # group ids
 in_process_group = 'topics'
 error_group = 'new_group'
-in_queue_group = 'group_title'
+eligible_group = 'group_title'
 completed_group = 'new_group51572'
 
 facilities = run_sql_query(facilities_sql)
 
 def calc_and_sort():
     print("Fetching project board...takes up to 3 mins.")
-    completed_df = monday_data.fetch_completed()
-    open_df = monday_data.fetch_open_items()
+    completed_df = monday_data.fetch_items(['Complete'])
+    open_df = monday_data.fetch_items(['North', 'South', 'Central'], all_groups=['North', 'South', 'Central'])
 
-    # Categorize the projects
     open_df = categorize_projects(open_df, pending_statuses)
+
     # Split the df_open into in_process and pending DataFrames
     df_in_process = open_df[open_df['project_category'] == 'in_process']
     df_pending = open_df[open_df['project_category'] == 'pending']
 
-    # Calculate costs for in process projects
-    df_in_process = calculate_costs(df_in_process)
-    df_in_process['cost'] = df_in_process['cost'] * buffer  
-    completed_df = calculate_costs(completed_df)
+    # Calculate costs for in process projects including a 10% buffer for projects not completed
+    df_in_process = calculate_costs(df_in_process, buffer) 
+    completed_df = calculate_costs(completed_df, 1)
 
     df_in_process['completed'] = False 
     completed_df['completed'] = True
@@ -160,75 +159,96 @@ def find_existing_rows():
         } 
         for item in existing_items
         ]
-    return output
+
+    df = pd.DataFrame(output)
+
+    # Replace blank strings with 0
+    df.replace('', 0, inplace=True)
+    
+    # Convert to the correct data types
+    df['numbers'] = df['numbers'].astype(float)
+    df['numbers6'] = df['numbers6'].astype(float)
+    df['numbers0'] = df['numbers0'].astype(int)
+    df['numbers_1'] = df['numbers_1'].astype(int)
+    df['numbers1'] = df['numbers1'].astype(float)
+    df['numbers05'] = df['numbers05'].astype(int)
+    df['numbers_15'] = df['numbers_15'].astype(int)
+    
+    return df
+
 
 def move_between_groups(completed_df, in_process_df, open_df, existing_items):
-
     print('moving rows to correct groups...')
-    for item in existing_items:
-        project_id = str(item['id'])
-        item_group = item['group']
-        item_id = item['item_id']
+    for index, row in existing_items.iterrows():
+        project_id = str(row['id'])
+        item_group = row['group']
+        item_id = row['item_id']
         
         # Check if item_id is not None
         if project_id is not None:
         
-        # Check if the item is in 'completed_df' but not marked as 'Complete' on the board
+            # Check if the item is in 'completed_df' but not marked as 'Complete' on the board
             if item_group != 'Completed' and project_id in completed_df['text2'].values:
-                # Delete the item from its current group
-                monday_data.delete_item(item_id)
-                
-                # Recreate the item in the 'Complete' group
-                # You can extract the row from 'completed_df' corresponding to 'item_id'
-                row = completed_df[completed_df['text2'] == project_id].iloc[0]
-                monday_data.create_items_from_df(row, completed_group, error_group)  # replace group IDs with actual IDs
-
-            # Do similar checks for 'In Process' and 'In Queue' groups
+                monday_data.move_items_between_groups(item_id, completed_group)
+                print(f"{project_id} moved from {item_group} to Completed.")
+            # Do similar checks for 'In Process'
             elif item_group != 'In Process' and project_id in in_process_df['text2'].values:
-                monday_data.delete_item(item_id)
-                row = in_process_df[in_process_df['text2'] == project_id].iloc[0]
-                monday_data.create_items_from_df(row, in_process_group, error_group)  # replace group IDs with actual IDs
-                
-            elif item_group != 'In Queue' and project_id in open_df['text2'].values:
-                monday_data.delete_item(item_id)
-                row = open_df[open_df['text2'] == project_id].iloc[0]
-                monday_data.create_items_from_df(row, in_queue_group, error_group)  # replace group IDs with actual IDs
+                monday_data.move_items_between_groups(item_id, in_process_group)
+                print(f"{project_id} moved from {item_group} to In Process.")
+            # Check for eligible items that have inputs that would cause an error and move to error group
+            elif item_group == 'Eligible' and (row['numbers'] == "" or row['numbers'] == 0 or row['numbers6']=="" or row['status9'] == 'Escalation'\
+                or pd.isna(row['numbers']) or pd.isna(row['numbers6'])):
+                monday_data.move_items_between_groups(item_id, error_group)
+                print(f"{project_id} moved from {item_group} to Errors.")
+            # Check for items not in eligible group but are currently available and ranked
+            elif item_group != 'Eligible' and project_id in open_df['text2'].values:
+                monday_data.move_items_between_groups(item_id, eligible_group)
+                print(f"{project_id} moved from {item_group} to Eligible.")  # replace group IDs with actual IDs
 
 def create_missing_items(completed_df, in_process_df, open_df, existing_items):
     print('adding new projects...')
-    existing_ids = [str(item['id']) for item in existing_items]
+    existing_ids = set(existing_items['id'])
 
     for df, group in [(completed_df, completed_group), 
                       (in_process_df, in_process_group), 
-                      (open_df, in_queue_group)]:
-        
+                      (open_df, eligible_group)]:
         # Go through each item in the dataframe
         for index, row in df.iterrows():
-            item_id = str(row['text2'])
+            item_id = row['text2']
 
             # If the item id is not in the list of existing ids, create a new item
             if item_id not in existing_ids:
+                print(f'adding {item_id}')
                 monday_data.create_items_from_df(row, group, error_group)
 
 def update_existing_data(preprocessed_df, existing_items):
     count =1
     # Loop through each item in preprocessed_df
     for index, row in preprocessed_df.iterrows():
-        # Find the matching item in existing_items
         matching_items = [item for item in existing_items if item['id'] == row['text2']]
-        # If there's a match, check if there's any difference in the columns to check
         if matching_items:
             matching_item = matching_items[0]
             for column in columns_to_check:
-                # If the values are different, update the item on Monday board
-                if row[column] != matching_item[column]:
-                    # Use the 'change_item_value' function from Monday library
+                # convert string values to their appropriate type before comparison
+                if matching_item[column].isdigit():
+                    # if it's a string representation of an integer
+                    existing_value = int(matching_item[column])
+                else:
+                    try:
+                        # try converting to a float (will fail if the string is not a number)
+                        existing_value = float(matching_item[column])
+                    except ValueError:
+                        # if it's not a number, keep it as a string
+                        existing_value = matching_item[column]
+
+                if row[column] != existing_value:
                     print(column)
                     print(f"values changed: {count}")
                     if pd.isna(row[column]):
-                        continue  # skip this iteration if the value is nan
+                        continue
                     monday_data.change_item_value(new_board_id, matching_item['item_id'], column, row[column])
                     count += 1
+
 
 #still in the works
 # def process_and_send_items(df_in_process, open_df, new_board_id):

@@ -20,7 +20,7 @@ def s3_init():
           aws_secret_access_key=MASTER_SECRET) 
     return s3 
     
-def grab_s3_file(f, bucket='capex-rm-optimization', idx_col=None):
+def grab_s3_file(f, bucket, idx_col=None):
     s3 = s3_init()
     data = s3.get_object(Bucket=bucket, Key=f)['Body'].read().decode('utf-8') 
     if idx_col is None:
@@ -29,11 +29,10 @@ def grab_s3_file(f, bucket='capex-rm-optimization', idx_col=None):
         data = pd.read_csv(StringIO(data), index_col=idx_col)
 
     return data 
-
     
 def grab_budgets(facilities):
     budget = pd.read_csv('budgets_2023.csv')
-    # budget = grab_s3_file('budgets_2023.csv') #switch later
+    # budget = grab_s3_file('budgets_2023.csv', bucket ='capex-rm-optimization') #switch later
 
     # facilities = run_sql_query(facilities_sql)
     facility_data = facilities[['rd', 'fund', 'fs']]
@@ -45,16 +44,7 @@ def grab_budgets(facilities):
     
     return merge 
 
-# def grab_pl():
-#     pl = pd.read_csv('p&l_4_2023.csv')
-#     # pl = grab_s3_file('p&l_4_2023.csv') #switch later
-#     cols_to_keep = ['RD']
-#     cols_to_melt = pl.columns.difference(cols_to_keep)
-
-#     new_pl = pd.melt(pl, id_vars=cols_to_keep, value_vars=cols_to_melt, var_name="Date", value_name="R&M")
-
-#     return new_pl
-
+# adds column for remaining budget for R&M or CapEx (determined in parameter) by facility
 def remaining_facility(completed, facilities, capex=False):
     budget = grab_budgets(facilities)
 
@@ -70,15 +60,24 @@ def remaining_facility(completed, facilities, capex=False):
     merge = pd.merge(budget, spent, how='left', on='RD') 
     
     merge['Final Cost'] = merge['Final Cost'].fillna(0)
-    merge['remaining_budget'] = merge['R&M budget'] - merge['Final Cost']
+    #change to capex if capex=true
+    if capex==False:
+        merge['remaining_budget'] = merge['R&M budget'] - merge['Final Cost']
+    else:
+        merge['remaining_budget'] = merge['CapEx budget'] - merge['Final Cost']
 
     return merge 
 
-def remaining_fund(completed, facilities, capex=False):
-    remaining = remaining_facility(completed, facilities, capex)
-    remaining = remaining[['fund', 'R&M budget', 'Final Cost', 'remaining_budget']]
-    remaining = remaining.rename(columns = {'remaining_budget':'remaining_fund_budget'})
-    fund_leftovers = remaining.groupby('fund', as_index=False).sum()
+def remaining_fund(remaining_by_facility, capex=False):
+    # remaining = remaining_facility(completed, facilities, capex)
+    if capex==False:
+        budget_column = 'R&M budget'
+    else: 
+        budget_column = 'CapEx budget'
+
+    remaining_by_facility = remaining_by_facility[['fund', budget_column, 'Final Cost', 'remaining_budget']]
+    remaining_by_facility = remaining_by_facility.rename(columns = {'remaining_budget':'remaining_fund_budget'})
+    fund_leftovers = remaining_by_facility.groupby('fund', as_index=False).sum()
 
     return fund_leftovers
 
@@ -86,3 +85,13 @@ def categorize_projects(df, pending_statuses):
     df['project_category'] = df['Status'].apply(lambda x: 'pending' if x in pending_statuses else 'in_process')
     return df
 
+
+# def grab_pl():
+#     pl = pd.read_csv('p&l_4_2023.csv')
+#     # pl = grab_s3_file('p&l_4_2023.csv') #switch later
+#     cols_to_keep = ['RD']
+#     cols_to_melt = pl.columns.difference(cols_to_keep)
+
+#     new_pl = pd.melt(pl, id_vars=cols_to_keep, value_vars=cols_to_melt, var_name="Date", value_name="R&M")
+
+#     return new_pl
