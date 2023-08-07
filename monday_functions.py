@@ -188,6 +188,99 @@ class Monday:
                 except Exception as e:
                     print(f"Error deleting item: {e}")
 
+    def query_items(self, board_id):
+        headers = {
+            'Authorization': self.api_key,
+            'Content-Type': 'application/json',
+        }
+
+        query = """
+            query ($boardId: [Int]) {
+                boards (ids: $boardId) {
+                    items {
+                        id
+                        name
+                        column_values(ids: ["dropdown3", "status"]) {
+                            id
+                            text
+                            value
+                        }
+                    }
+                }
+            }
+        """
+
+        variables = {'boardId': [int(board_id)]}
+
+        data = {'query': query, 'variables': variables}
+
+        response = requests.post('https://api.monday.com/v2', headers=headers, json=data)
+        response_json = response.json()
+        return response_json
+
+    def query_subitems(self, item_id):
+        headers = {
+            'Authorization': self.api_key,
+            'Content-Type': 'application/json',
+        }
+
+        query = """
+            query ($itemId: [Int]) {
+                items (ids: $itemId) {
+                    subitems {
+                        id
+                        name
+                        column_values(ids: ["link", "status_1"]) {
+                            id
+                            text
+                        }
+                    }
+                }
+            }
+        """
+
+        variables = {'itemId': [int(item_id)]}  
+
+        data = {'query': query, 'variables': variables}
+
+        response = requests.post('https://api.monday.com/v2', headers=headers, json=data)
+        response_json = response.json()
+        return response_json
+    
+    def generate_subitem_df(self, board_id):
+        data_for_df = []
+
+        items_results = self.query_items(board_id)
+        items_data = items_results.get('data', {}).get('boards', [])[0].get('items', [])
+        items_data = [item for item in items_data if any(col.get('value') == '{"ids":[1]}' for col in item['column_values'] if col.get('id') == 'dropdown3')]
+
+        for item in items_data:
+            item_id = item['id']
+            item_name = item['name']
+            item_status = next((col.get('text') for col in item['column_values'] if col.get('id') == 'status'), None)
+
+            subitems_results = self.query_subitems(item_id)
+            items = subitems_results.get('data', {}).get('items', [])
+            if items:
+                subitems = items[0].get('subitems', [])
+                if subitems:
+                    for subitem in subitems:
+                        subitem_id = subitem['id']
+                        subitem_name = subitem['name']
+                        subitem_link = next((col.get('text') for col in subitem['column_values'] if col.get('id') == 'link'), None)
+                        subitem_status_1 = next((col.get('text') for col in subitem['column_values'] if col.get('id') == 'status_1'), None) or item_status
+
+                        if not (subitem_name == 'Subitem' and not subitem_link):
+                            data_for_df.append({
+                                "item_id": item_id,
+                                "subitem_id": subitem_id,
+                                "item_name": item_name,
+                                "link": subitem_link,
+                                "status_1": subitem_status_1
+                            })
+
+        df = pd.DataFrame(data_for_df)
+        return df
 
 
     # def create_items_from_df(self, df, group_id):
@@ -290,41 +383,5 @@ class Monday:
 
                   
 
-    
-    
-    
-    # doesn't work
-    def fetch_subitems(self):
-        query = '''
-        query {
-          boards(ids: %s) {
-            items {
-              id
-              name
-              subitems {
-                id
-                name
-                column_values {
-                  id
-                  text
-                }
-              }
-            }
-          }
-        }
-        ''' % self.board_id
-        data = {"query": query}
-        response = requests.post(self.url, headers=self.headers, json=data)
-        response_json = response.json()
 
-        rows = []
-        for item in response_json['data']['boards'][0]['items']:
-            for subitem in item.get('subitems', []):
-                row = {'parent_item_id': item['id'], 'subitem_id': subitem['id'], 'subitem_name': subitem['name']}
-                for column in subitem['column_values']:
-                    row[self.columns[column['id']]] = column['text']
-                rows.append(row)
-                
-        return pd.DataFrame(rows)
-    
 
