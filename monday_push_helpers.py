@@ -9,9 +9,10 @@ from dotenv import load_dotenv
 load_dotenv()
 # update variables as needed - scaling variables in algo.py
 buffer = 1.1 # adding a 10% buffer to costs of uncompleted projects
+capex_threshold = 2500
 pending_statuses = ['Waiting for Estimate', 'Vendor Needed','Quote Requested','New Project', 'On Hold','Gathering Scope', 'Locating Vendors']
 # checks the values and updates changes for these columns
-columns_to_check = ['numbers', 'numbers6', 'numbers0', 'numbers_1', 'status19', 'status9', 'numbers05', 'numbers_15']
+columns_to_check = ['numbers', 'numbers6', 'numbers0', 'numbers_1', 'status19', 'status9', 'numbers05', 'numbers_15', 'numbers1']
 monday_data = Monday()
 new_board_id = os.getenv('new_board_id')
 board_id = os.getenv('board_id')
@@ -21,62 +22,91 @@ in_process_group = 'topics'
 error_group = 'new_group'
 eligible_group = 'group_title'
 completed_group = 'new_group51572'
+ineligible_group ='new_group40156'
 
 facilities = run_sql_query(facilities_sql)
 
-def calc_and_sort():
+def fetch_data():
     print("Fetching project board...takes up to 3 mins.")
-    completed_df = monday_data.fetch_items(['Complete'])
-    open_df = monday_data.fetch_items(['North', 'South', 'Central'], all_groups=['North', 'South', 'Central'])
+    completed = monday_data.fetch_items(['Complete'])
+    open_data = monday_data.fetch_items(['North', 'South', 'Central'], all_groups=['North', 'South', 'Central'])
+    print('fetched')
+    return completed, open_data
 
-    open_df = categorize_projects(open_df, pending_statuses)
+def split_data(df):
+    df_in_process = df[df['project_category'] == 'in_process']
+    df_pending = df[df['project_category'] == 'pending']
+    print('split')
+    return df_in_process, df_pending
 
-    # Split the df_open into in_process and pending DataFrames
-    df_in_process = open_df[open_df['project_category'] == 'in_process']
-    df_pending = open_df[open_df['project_category'] == 'pending']
-
-    # Calculate costs for in process projects including a 10% buffer for projects not completed
-    df_in_process = calculate_costs(df_in_process, buffer) 
+def calculate_combined_costs(df_in_process, completed_df, buffer=1.1):
+    df_in_process = calculate_costs(df_in_process, buffer)
     completed_df = calculate_costs(completed_df, 1)
-
     df_in_process['completed'] = False 
     completed_df['completed'] = True
-    completed_combined = pd.concat([completed_df, df_in_process], ignore_index=True)
+    print('calculated costs')
+    return pd.concat([completed_df, df_in_process], ignore_index=True)
 
-    # Calculate the remaining budget for each facility and each fund for R&M
-    remaining_facility_df = remaining_facility(completed_combined,facilities)
-    remaining_fund_df = remaining_fund(completed_combined, facilities)
+def gathered_budgets(completed_combined, facilities):
+    remaining_facility_df = remaining_facility(completed_combined, facilities)
+    remaining_fund_df = remaining_fund(remaining_facility_df)
+    facilities_df = remaining_facility_df.merge(remaining_fund_df, on=['fund','Capex'], how='left')
+    print('fetched budgets')
+    return facilities_df.rename(columns={
+        'remaining_budget_x': 'remaining_facility_budget',
+        'budget_x': 'facility_budget',
+        'budget_y': 'fund_budget'
+    })
 
-    # rename columns before the merge
-    remaining_facility_df = remaining_facility_df.rename(columns={"Final Cost": "spent_facility"})
-    remaining_fund_df = remaining_fund_df.rename(columns={"Final Cost": "spent_fund"})
-    remaining_fund_df = remaining_fund_df.drop(columns=['R&M budget'])
+def process_dataframes(df, facilities_df):
+    df = calc_cost_effectiveness(df)
+    df['Capex'] = df['cost'] > capex_threshold
+    df = df.merge(facilities_df[['RD','Capex', 'fund', 'remaining_budget', 'remaining_fund_budget']], on=['RD','Capex'], how='left')
+    df = df.sort_values(by='cost_effectiveness', ascending=False)
+    print('processed cost effectiveness')
+    return df
 
-    facilities_df = remaining_facility_df.merge(remaining_fund_df, on='fund', how='left')
+def add_cumulative_budget_columns(df):
+    df['cumulative_cost'] = df.groupby('RD')['cost'].cumsum().astype(int)
+    df['cumulative_fund_cost'] = df.groupby('fund')['cost'].cumsum().fillna(0).astype(int)
+    df['remaining_budget'] = df['remaining_budget'].fillna(0).astype(int)
+    df['remaining_fund_budget'] = df['remaining_fund_budget'].fillna(0).astype(int)
+    df['remaining_budget_by_rd'] = (df['remaining_budget'] - df['cumulative_cost']).fillna(0).astype(int)
+    df['remaining_budget_by_fund'] = (df['remaining_fund_budget'] - df['cumulative_fund_cost']).fillna(0).astype(int)
+    return df.rename(columns={
+        'remaining_budget': 'current_rd_budget_status',
+        'remaining_fund_budget': 'current_fund_budget_status'
+    })
 
-    df_in_process = calc_cost_effectiveness(df_in_process)
-    open_df = calc_cost_effectiveness(df_pending)
-    # Merge the facilities dataframe into the open projects dataframe to get the budget information for each project
-    open_df = open_df.merge(facilities_df[['RD', 'fund', 'remaining_budget', 'remaining_fund_budget']], on='RD', how='left')
-
-    # Rank the projects based on cost-effectiveness
-    open_df = open_df.sort_values(by='cost_effectiveness', ascending=False)
- 
-    # Add columns for cumulative cost, and flags for surpassing facility and fund budgets
-    open_df['cumulative_cost'] = open_df.groupby('RD')['cost'].cumsum().astype(int)
-    open_df['cumulative_fund_cost'] = open_df.groupby('fund')['cost'].cumsum()
-    open_df['cumulative_fund_cost'] =open_df['cumulative_fund_cost'].fillna(0).astype(int)
-    open_df['remaining_budget'] =open_df['remaining_budget'].fillna(0).astype(int)
-    open_df['remaining_fund_budget'] =open_df['remaining_fund_budget'].fillna(0).astype(int)
-
-    open_df['remaining_budget_by_rd'] = (open_df['remaining_budget'] - open_df['cumulative_cost']).fillna(0).astype(int)
-    open_df['remaining_budget_by_fund'] = (open_df['remaining_fund_budget'] - open_df['cumulative_fund_cost']).fillna(0).astype(int)
-    open_df = open_df.rename(columns = {'remaining_budget': 'current_rd_budget_status', 'remaining_fund_budget':'current_fund_budget_status'})
+def calc_and_sort():
+    completed_df, open_df = fetch_data()
+    assert not completed_df.empty, "The completed_df dataframe is empty."
+    assert not open_df.empty, "The open_df dataframe is empty."
     
+    open_df = categorize_projects(open_df, pending_statuses)
+    
+    df_in_process, df_pending = split_data(open_df)
+    assert (df_in_process['project_category'] == 'in_process').all(), "The df_in_process contains incorrect data."
+    assert (df_pending['project_category'] == 'pending').all(), "The df_pending contains incorrect data."
+
+    completed_combined = calculate_combined_costs(df_in_process, completed_df)
+    assert len(completed_combined) == len(df_in_process) + len(completed_df), "Data mismatch in combined dataframe."
+    
+    facilities_df = gathered_budgets(completed_combined, facilities)
+    expected_columns = ['RD', 'fund', 'Capex', 'facility_budget', 'spent_facility','remaining_budget', 'fund_budget', 'spent_fund','remaining_fund_budget']
+    assert all(column in facilities_df.columns for column in expected_columns), "facilities_df is missing expected columns."
+    
+    df_in_process = process_dataframes(df_in_process, facilities_df)
+    open_df = process_dataframes(df_pending, facilities_df)
+
+    open_df = add_cumulative_budget_columns(open_df)
+    budget_columns = ['cumulative_cost', 'cumulative_fund_cost', 'remaining_budget_by_rd', 'remaining_budget_by_fund']
+    assert all(column in open_df.columns for column in budget_columns), "open_df is missing budget columns after calculations."
+
     open_df['exceeds_facility_budget'] = open_df['remaining_budget_by_rd'] < 0
     open_df['exceeds_fund_budget'] = open_df['remaining_budget_by_fund'] < 0
-    
     open_df = open_df.reset_index(drop=True)
+    
     return open_df, df_in_process, completed_df
 
 def preprocess_df(df):
@@ -201,9 +231,13 @@ def move_between_groups(completed_df, in_process_df, open_df, existing_items):
                 monday_data.move_items_between_groups(item_id, error_group)
                 print(f"{project_id} moved from {item_group} to Errors.")
             # Check for items not in eligible group but are currently available and ranked
-            elif item_group != 'Eligible' and project_id in open_df['text2'].values:
+            elif item_group != 'Eligible' and project_id in open_df['text2'].values and (row['numbers'] != "" and row['numbers'] != 0 and \
+                row['numbers6']!="" and row['status9'] != 'Escalation') and (row['numbers_15'] >=0 or row['status9']=='EMERGENCY' or row['status9']=='High'):
                 monday_data.move_items_between_groups(item_id, eligible_group)
                 print(f"{project_id} moved from {item_group} to Eligible.")  # replace group IDs with actual IDs
+            elif item_group == 'Eligible' and row['numbers_15'] < 0 and row['status9']!='EMERGENCY' and row['status9']!='High':
+                monday_data.move_items_between_groups(item_id, ineligible_group)
+                print(f"{project_id} moved from {item_group} to Ineligible.") 
 
 def create_missing_items(completed_df, in_process_df, open_df, existing_items):
     print('adding new projects...')
@@ -219,27 +253,33 @@ def create_missing_items(completed_df, in_process_df, open_df, existing_items):
             # If the item id is not in the list of existing ids, create a new item
             if item_id not in existing_ids:
                 print(f'adding {item_id}')
-                monday_data.create_items_from_df(row, group, error_group)
+                monday_data.create_items_from_df(row, group, error_group, ineligible_group)
 
 def update_existing_data(preprocessed_df, existing_items):
+    existing_items = existing_items.to_dict(orient='records')
+
+    print(f"Type of existing_items: {type(existing_items)}")  # Debug print 1
     count =1
     # Loop through each item in preprocessed_df
     for index, row in preprocessed_df.iterrows():
-        matching_items = [item for item in existing_items if item['id'] == row['text2']]
+        matching_items = [item for item in existing_items if int(item['id']) == int(row['text2'])]
         if matching_items:
             matching_item = matching_items[0]
             for column in columns_to_check:
                 # convert string values to their appropriate type before comparison
-                if matching_item[column].isdigit():
-                    # if it's a string representation of an integer
-                    existing_value = int(matching_item[column])
+                value = matching_item[column]
+                if isinstance(value, float):
+                    existing_value = value
+                elif isinstance(value, str) and value.isdigit():
+                    existing_value = int(value)
                 else:
                     try:
                         # try converting to a float (will fail if the string is not a number)
-                        existing_value = float(matching_item[column])
+                        existing_value = float(value)
                     except ValueError:
                         # if it's not a number, keep it as a string
-                        existing_value = matching_item[column]
+                        existing_value = value
+
 
                 if row[column] != existing_value:
                     print(column)
@@ -248,38 +288,3 @@ def update_existing_data(preprocessed_df, existing_items):
                         continue
                     monday_data.change_item_value(new_board_id, matching_item['item_id'], column, row[column])
                     count += 1
-
-
-#still in the works
-# def process_and_send_items(df_in_process, open_df, new_board_id):
-#     df_in_process = df_in_process.drop(columns=['region'])
-#     df_in_process = df_in_process.merge(facilities, how="left", left_on = 'RD', right_on = 'rd')
-#     existing_items = monday_data.fetch_items_by_board_id(new_board_id)
-#     existing_items = existing_items['data']['boards'][0]['items']
-
-#     # Iterate over the rows in df_in_process and open_df
-#     for df in [df_in_process, open_df]:
-#         for _, row in df.iterrows():
-#             # Iterate over the existing_items
-#             for item in existing_items:
-#                 existing_item_dict = {column['id']: column['text'] for column in item['column_values']}
-                
-#                 # Extract the relevant keys from the existing_item_dict
-#                 existing_dict_relevant_keys = {key: existing_item_dict[key] for key in row.keys() if key in existing_item_dict}
-#                 # Now you can compare the dictionaries
-#                 if row.to_dict() != existing_dict_relevant_keys:
-#                     # If the column values have changed, delete the item from the board
-#                     monday_data.delete_item(item['id'])
-
-
-#             if df is df_in_process:
-#                 # Send the item to the 'topics' group
-#                 monday_data.create_items_from_df(row.to_frame().T, in_process_group)
-#             else:
-#                 # Check if the cost or cost_effectiveness is missing or not a number
-#                 if pd.isna(row['cost']) or row['cost'] == 0 or pd.isna(row['cost_effectiveness']):
-#                     # Send the item to the 'new_group'
-#                     monday_data.create_items_from_df(row.to_frame().T, error_group)
-#                 else:
-#                     # Otherwise, send the item to the 'group_title'
-#                     monday_data.create_items_from_df(row.to_frame().T, in_queue_group)

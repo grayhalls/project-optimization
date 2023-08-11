@@ -6,6 +6,7 @@ import requests
 import numpy as np
 from typing import List, Dict
 from collections import Counter
+import json 
 
 class Monday:
     def __init__(self):
@@ -112,7 +113,7 @@ class Monday:
     def delete_item(self, item_id):
         self.client.items.delete_item_by_id(item_id)  
 
-    def create_items_from_df(self, row, group_id, error_group):
+    def create_items_from_df(self, row, group_id, error_group, ineligible_group):
 
         if group_id =='new_group51572' or group_id=='topics': #if completed or in process, no errors
             group = group_id
@@ -120,6 +121,8 @@ class Monday:
         elif row['numbers'] == "" or row['numbers'] == 0 or row['numbers6']=="" or row['status9'] == 'Escalation'\
         or pd.isna(row['numbers']) or pd.isna(row['numbers6']):
             group = error_group
+        elif row['numbers_15'] < 0:
+            group = ineligible_group
         else: #else goes to eligible
             group = group_id
         # Construct the column_values (you can customize this based on your needs)
@@ -200,7 +203,10 @@ class Monday:
                     items {
                         id
                         name
-                        column_values(ids: ["dropdown3", "status"]) {
+                        group {
+                            title
+                        }
+                        column_values(ids: ["dropdown3", "status", "text4"]) {
                             id
                             text
                             value
@@ -247,19 +253,27 @@ class Monday:
         response_json = response.json()
         return response_json
     
-    def generate_subitem_df(self, board_id):
+    def generate_subitem_df(self, board_id, groups=['South', 'North', 'Central']):
         data_for_df = []
 
         items_results = self.query_items(board_id)
+        assert items_results is not None, "items_results is None"
+
         items_data = items_results.get('data', {}).get('boards', [])[0].get('items', [])
-        items_data = [item for item in items_data if any(col.get('value') == '{"ids":[1]}' for col in item['column_values'] if col.get('id') == 'dropdown3')]
+        assert items_data is not None, "items_data is None"
+
+        items_data = [item for item in items_data if item['group']['title'] in groups and any(col.get('value') == '{"ids":[1]}' for col in item['column_values'] if col.get('id') == 'dropdown3')]
+        assert items_data, "No items match the given conditions"
 
         for item in items_data:
             item_id = item['id']
             item_name = item['name']
+            rd = next((col.get('text') for col in item['column_values'] if col.get('id') == 'text4'), None)
             item_status = next((col.get('text') for col in item['column_values'] if col.get('id') == 'status'), None)
 
             subitems_results = self.query_subitems(item_id)
+            assert subitems_results is not None, "subitems_results is None"
+
             items = subitems_results.get('data', {}).get('items', [])
             if items:
                 subitems = items[0].get('subitems', [])
@@ -274,111 +288,18 @@ class Monday:
                             data_for_df.append({
                                 "item_id": item_id,
                                 "subitem_id": subitem_id,
+                                "site_code": rd,
                                 "item_name": item_name,
+                                "subitem_name": subitem_name,
                                 "link": subitem_link,
                                 "status_1": subitem_status_1
                             })
 
         df = pd.DataFrame(data_for_df)
+        assert not df.empty, "DataFrame is empty"
+
         return df
 
-
-    # def create_items_from_df(self, df, group_id):
-    #     for _, row in df.iterrows():
-
-    #         # Construct the item_name (you can customize this based on your needs)
-    #         item_name = f"{row['RD']} - {row['item_name']}" if 'item_name' in df.columns and 'RD' in df.columns else ""
-
-    #         # Construct the column_values (you can customize this based on your needs)
-    #         column_values = {
-    #             "name": (row['RD'] + " - " + row['item_name']) if 'RD' in df.columns and 'item_name' in df.columns else "",
-    #             "region": row['region'] if 'region' in df.columns else "",
-    #             "rd": row['RD'] if 'RD' in df.columns else "",
-    #             "project_id0": row['id'] if 'id' in df.columns else "",
-    #             "number": row['cost'] if 'cost' in df.columns and pd.notnull(row['cost']) else 0, # replace NaN with 0
-    #             "numbers6": row['cost_effectiveness'] if 'cost_effectiveness' in df.columns and pd.notnull(row['cost_effectiveness']) else 0, # replace NaN with 0
-    #             "text": row['fund'] if 'fund' in df.columns and pd.notnull(row['fund']) else "", # replace NaN with empty string
-    #             "numbers0": row['remaining_budget'] if 'remaining_budget' in df.columns and pd.notnull(row['remaining_budget']) else 0, # replace NaN with 0
-    #             "numbers_1": row['remaining_fund_budget'] if 'remaining_fund_budget' in df.columns and pd.notnull(row['remaining_fund_budget']) else 0, # replace NaN with 0
-    #             "exceeds_rd_budget3": str(row['exceeds_facility_budget']) if 'exceeds_facility_budget' in df.columns else "", # Exceeds RD budget
-    #             "exceeds_fund_budget": str(row['exceeds_fund_budget']) if 'exceeds_fund_budget' in df.columns else "" # Exceeds Fund budget
-    #         }
-
-    #         # Create the item
-    #         try:
-    #             response = self.client.items.create_item(board_id=self.new_board_id, group_id=group_id, item_name=item_name, column_values=column_values)
-    #         except Exception as e:
-    #             print(f"Error creating item: {e}")
-
-    # def fetch_open_items(self):
-    #     # Calculate the total number of items
-    #     group_titles = ['North', 'South', 'Central']
-    #     total_items = self.count_items_in_groups(group_titles)
-    #     if total_items <=1000:
-    #         limit = total_items
-    #     else:
-    #         limit = 1000
-    #     # Determine the number of pages needed
-    #     pages = (total_items // limit) + 1
-
-    #     # Fetch column names
-    #     column_names = self.fetch_column_names(self.board_id)
-
-    #     rows = []
-
-    #     # Fetch and process items page by page
-    #     for page in range(1, pages + 1):
-    #         try:
-    #             results = self.client.boards.fetch_items_by_board_id(board_ids=self.board_id, limit=limit, page=page)
-    #             data = results['data']['boards'][0]['items']
-    #         except Exception as e:
-    #             # the API client can raise
-    #             print(f"An error occurred while fetching items: {e}")
-    #             continue
-
-    #         for item in data:
-    #             if item['group']['title'] in set(group_titles):
-    #                 row = self.parse_item(item, column_names)
-    #                 rows.append(row)
-            
-    #     df = pd.DataFrame(rows)
-
-    #     df = self.transform_dataframe(df)  # Moved dataframe manipulation to a separate function
-
-    #     return df
-    
-    # def fetch_completed(self):
-    #     group_titles = ['North', 'South', 'Central', 'Complete']
-    #     total_items = self.count_items_in_groups(group_titles)
-    #     if total_items <=1000:
-    #         limit = total_items
-    #     else:
-    #         limit = 1000
-       
-    #     pages = (total_items // limit) + 1
-    #     column_names = self.fetch_column_names(self.board_id)
-    #     rows = []
-
-    #     # Fetch and process items page by page
-    #     for page in range(1, pages + 1):
-    #         try:
-    #             results = self.client.boards.fetch_items_by_board_id(board_ids=self.board_id, limit=limit, page=page)
-    #             data = results['data']['boards'][0]['items']
-    #         except Exception as e:
-    #             # the API client can raise
-    #             print(f"An error occurred while fetching items: {e}")
-    #             continue
-
-    #         for item in data:
-    #             if item['group']['title'] == 'Complete':
-    #                 row = self.parse_item(item, column_names)
-    #                 rows.append(row)
-            
-    #     df = pd.DataFrame(rows)
-        
-    #     df = self.transform_dataframe(df)  # Moved dataframe manipulation to a separate function
-
-    #     return df
 
 
                   

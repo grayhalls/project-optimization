@@ -5,8 +5,8 @@ import numpy as np
 # Define the priority thresholds for each priority level
 low_min, low_max = 10, 300
 medium_min, medium_max = 350, 750
-high_min, high_max = 800, 1500
-emergency_min, emergency_max = 5000, 10000
+high_min, high_max = 8000, 15000
+emergency_min, emergency_max = 500000, 800000
 unit_value_factor = 0.5
 
 # Define the piecewise function for priority calculation
@@ -54,6 +54,7 @@ def calculate_costs(df, buffer=1):
     df['cost'] = df['cost']*buffer
     return df
 
+
 def calc_cost_effectiveness(df):
     now = date.today()
     # Calculate the number of weeks since 'Open' date
@@ -66,7 +67,8 @@ def calc_cost_effectiveness(df):
     df['priority_value'] = df.apply(lambda row: priority_value(row), axis=1)
 
     # Calculate cost-effectiveness
-    df['cost_effectiveness'] = np.where(df['cost'] == 0, df['priority_value'], np.divide(df['priority_value'], df['cost'], where=df['cost'] !=0))
+    df['cost_effectiveness'] = np.where(df['cost']=="", 0, np.divide(df['priority_value'], df['cost']/3, where=df['cost'] !=0))
+
     # Normalize cost_effectiveness to be out of 100
     df['cost_effectiveness'] = df['cost_effectiveness'].astype(float)
 
@@ -75,23 +77,3 @@ def calc_cost_effectiveness(df):
     df['cost_effectiveness'] = df['cost_effectiveness'].round(2)
     return df
 
-
-# def priority_value(row, low_base, medium_base, high_base, emergency_base, rate, unit_value_factor):
-#     # Get the base priority
-#     if row['Priority'] == 'Low':
-#         base_priority = low_base
-#     elif row['Priority'] == 'Medium':
-#         base_priority = medium_base
-#     elif row['Priority'] == 'High':
-#         base_priority = high_base
-#     elif row['Priority'] == 'EMERGENCY':
-#         base_priority = emergency_base
-#     else:
-#         return np.nan  # return NaN for any other status
-
-#     # If the project is unit-specific, multiply the base priority by a factor that reflects the unit value
-#     # if row['Item Type'] == 'Unit':
-#     #     base_priority *= (1 + row['unit_value'] * unit_value_factor)
-
-#     # Return the priority value
-#     return base_priority * np.exp(rate * row['days'])

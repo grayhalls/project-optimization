@@ -11,11 +11,14 @@ proc_df_in_process, proc_open_df, proc_completed = preprocessing(in_process_df, 
 
 existing_items = find_existing_rows()
 # cleans items between groups. (ie. if an item is completed, it will remove it from the original group 
-# and add it to the completed group.)
+#   and add it to the completed group.)
 move_between_groups(proc_completed, proc_df_in_process, proc_open_df, existing_items) 
 
 # looks for any items that are on the project board that are not in the Ranking board and adds them
 create_missing_items(proc_completed, proc_df_in_process, proc_open_df, existing_items)
 
+print('Updating In Process Items')
 update_existing_data(proc_df_in_process, existing_items)
+print('Updating Eligible Items')
+update_existing_data(proc_open_df, existing_items)
 

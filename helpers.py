@@ -3,14 +3,19 @@ import pandas as pd
 from dotenv import load_dotenv
 import os 
 import boto3 
+import numpy as np
 import json  
 from io import StringIO    
-import pickle  
+import pickle 
+from monday_functions import Monday
+from sql_queries import run_sql_query, units_sql, tasks_to_units
 
-
+capex_threshold = 2500
+monday_data = Monday()
 load_dotenv()
 MASTER_ACCESS_KEY = os.getenv("MASTER_ACCESS_KEY")
 MASTER_SECRET = os.getenv("MASTER_SECRET")
+board_id = os.getenv('board_id')
 
 def s3_init():  
     
@@ -20,16 +25,58 @@ def s3_init():
           aws_secret_access_key=MASTER_SECRET) 
     return s3 
     
-def grab_s3_file(f, bucket, idx_col=None):
+def grab_s3_file(f, bucket, idx_col=None, is_json=False):
     s3 = s3_init()
     data = s3.get_object(Bucket=bucket, Key=f)['Body'].read().decode('utf-8') 
+    
+    # Check if the file is a JSON
+    if is_json:
+        return json.loads(data)  # Return the parsed JSON data as a dictionary
+    
+    # If the file is a CSV
     if idx_col is None:
         data = pd.read_csv(StringIO(data)) 
     else:
         data = pd.read_csv(StringIO(data), index_col=idx_col)
 
     return data 
+
+def grab_unit_values():
+    json_data=grab_s3_file('unit-value/last_update.json','rev-mgt',is_json=True)
+    last_upload_date = json_data["last_upload"]
+    csv_file_name = f"unit-value/{last_upload_date}.csv"
+    data = grab_s3_file(csv_file_name, 'rev-mgt')
+    data = data.rename(columns={'site_code':'RD'})
+    data= data[['RD','width', 'length', 'unit_type','replace_value']]
     
+    q50 = data['replace_value'].quantile(0.5)
+    # max = data['replace_value'].max()
+    
+    return data , q50
+
+def add_values_to_projects():
+    values, q50 = grab_unit_values()
+    assert not values.empty, "values DataFrame is empty."
+    
+    unit_projects = monday_data.generate_subitem_df(board_id)
+    assert not unit_projects.empty, "unit_projects DataFrame is empty."
+    unit_projects['task_id'] = pd.to_numeric(unit_projects['link'].str.split('/').str[-1], errors='coerce').fillna(0).astype('int64')
+    
+    units_to_tasks = run_sql_query(tasks_to_units)
+    units_to_tasks = units_to_tasks.rename(columns={'site_code':'RD'})
+    unit_projects = unit_projects.merge(units_to_tasks, how='left', on=['task_id'])
+
+    units = run_sql_query(units_sql)
+    assert not units.empty, "units DataFrame is empty."
+    
+    units = units.rename(columns={'rd':'RD'})
+    unit_projects = unit_projects.merge(units, how="left", on=['RD', 'unit_number'])
+    unit_value_data = unit_projects.merge(values, how="left", on=['RD','width','length','unit_type'])
+    unit_value_data['adj_value'] = unit_value_data['replace_value'] / q50
+
+    return unit_value_data
+
+
 def grab_budgets(facilities):
     budget = pd.read_csv('budgets_2023.csv')
     # budget = grab_s3_file('budgets_2023.csv', bucket ='capex-rm-optimization') #switch later
@@ -44,54 +91,39 @@ def grab_budgets(facilities):
     
     return merge 
 
-# adds column for remaining budget for R&M or CapEx (determined in parameter) by facility
-def remaining_facility(completed, facilities, capex=False):
+def remaining_facility(completed, facilities):
     budget = grab_budgets(facilities)
+    budget = budget.loc[budget.index.repeat(2)].reset_index(drop=True)
+    budget['Capex'] = [True, False] * (len(budget) // 2)
+
+    budget['budget'] = np.where(budget['Capex'], budget['recast_capex'], budget['R&M budget'])
+    budget = budget[['RD', 'fund', 'Capex', 'budget']]
 
     completed['Final Cost'] = pd.to_numeric(completed['Final Cost'], errors='coerce').fillna(0)
-    if capex==False:
-        completed = completed[completed['Final Cost'] < 2500]
-    else:
-        completed = completed[completed['Final Cost'] >= 2500]
+    # determining if a project is capex based on $2500 threshold
+    completed['Capex'] = completed['Final Cost'] >= capex_threshold
 
-    spent = completed[['RD', 'Final Cost']]
-    spent = spent.groupby('RD', as_index=False).sum()
+    spent = completed[['RD', 'Final Cost', 'Capex']]
+    spent = spent.groupby(['RD', 'Capex'], as_index=False).sum()
 
-    merge = pd.merge(budget, spent, how='left', on='RD') 
-    
+    merge = budget.merge(spent, how='left', on=['RD', 'Capex']) 
+
     merge['Final Cost'] = merge['Final Cost'].fillna(0)
-    #change to capex if capex=true
-    if capex==False:
-        merge['remaining_budget'] = merge['R&M budget'] - merge['Final Cost']
-    else:
-        merge['remaining_budget'] = merge['CapEx budget'] - merge['Final Cost']
+    
+    merge['remaining_budget'] = merge['budget'] - merge['Final Cost']
+
+    merge = merge.rename(columns={"Final Cost": "spent_facility"})
 
     return merge 
 
-def remaining_fund(remaining_by_facility, capex=False):
-    # remaining = remaining_facility(completed, facilities, capex)
-    if capex==False:
-        budget_column = 'R&M budget'
-    else: 
-        budget_column = 'CapEx budget'
-
-    remaining_by_facility = remaining_by_facility[['fund', budget_column, 'Final Cost', 'remaining_budget']]
-    remaining_by_facility = remaining_by_facility.rename(columns = {'remaining_budget':'remaining_fund_budget'})
-    fund_leftovers = remaining_by_facility.groupby('fund', as_index=False).sum()
+def remaining_fund(remaining_by_facility):
+    remaining_by_facility = remaining_by_facility[['fund', 'Capex', 'budget', 'spent_facility']]
+    fund_leftovers = remaining_by_facility.groupby(['fund', 'Capex'], as_index=False).sum()
+    fund_leftovers['remaining_fund_budget'] = fund_leftovers['budget'] - fund_leftovers['spent_facility']
+    fund_leftovers = fund_leftovers.rename(columns={"spent_facility": "spent_fund"})
 
     return fund_leftovers
 
 def categorize_projects(df, pending_statuses):
     df['project_category'] = df['Status'].apply(lambda x: 'pending' if x in pending_statuses else 'in_process')
     return df
-
-
-# def grab_pl():
-#     pl = pd.read_csv('p&l_4_2023.csv')
-#     # pl = grab_s3_file('p&l_4_2023.csv') #switch later
-#     cols_to_keep = ['RD']
-#     cols_to_melt = pl.columns.difference(cols_to_keep)
-
-#     new_pl = pd.melt(pl, id_vars=cols_to_keep, value_vars=cols_to_melt, var_name="Date", value_name="R&M")
-
-#     return new_pl

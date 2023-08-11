@@ -29,6 +29,20 @@ def run_sql_query(sql_query):
     
     return df 
 
+tasks_to_units = '''
+	select f.site_code, u.unit_number, t.id as task_id
+    from units u 
+    inner join facilities f on f.id = u.facility_id
+    inner join tasks t on t.taskable_id = u.id and t.taskable_type = 'Unit'
+'''
+
+units_sql = '''
+	select f.site_code as rd, u.unit_number, u.width, u.length, ut.key as unit_type
+    from units u 
+    inner join facilities f on f.id = u.facility_id
+    inner join unit_types ut on ut.id = u.unit_type_id
+'''
+
 facilities_sql = '''
 with acquisition_dates as (
 	select *
