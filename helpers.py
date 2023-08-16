@@ -1,12 +1,10 @@
 import pandas as pd
-# from sql_queries import run_sql_query, facilities_sql 
 from dotenv import load_dotenv
 import os 
 import boto3 
 import numpy as np
 import json  
 from io import StringIO    
-import pickle 
 from monday_functions import Monday
 from sql_queries import run_sql_query, units_sql, tasks_to_units
 
@@ -49,13 +47,10 @@ def grab_unit_values():
     data = data.rename(columns={'site_code':'RD'})
     data= data[['RD','width', 'length', 'unit_type','replace_value']]
     
-    q50 = data['replace_value'].quantile(0.5)
-    # max = data['replace_value'].max()
-    
-    return data , q50
+    return data
 
 def add_values_to_projects():
-    values, q50 = grab_unit_values()
+    values= grab_unit_values()
     assert not values.empty, "values DataFrame is empty."
     
     unit_projects = monday_data.generate_subitem_df(board_id)
@@ -72,7 +67,6 @@ def add_values_to_projects():
     units = units.rename(columns={'rd':'RD'})
     unit_projects = unit_projects.merge(units, how="left", on=['RD', 'unit_number'])
     unit_value_data = unit_projects.merge(values, how="left", on=['RD','width','length','unit_type'])
-    unit_value_data['adj_value'] = unit_value_data['replace_value'] / q50
 
     return unit_value_data
 
@@ -81,7 +75,6 @@ def grab_budgets(facilities):
     budget = pd.read_csv('budgets_2023.csv')
     # budget = grab_s3_file('budgets_2023.csv', bucket ='capex-rm-optimization') #switch later
 
-    # facilities = run_sql_query(facilities_sql)
     facility_data = facilities[['rd', 'fund', 'fs']]
 
     merge = pd.merge(facility_data, budget, how="left", left_on = ['rd'], right_on = 'RD')

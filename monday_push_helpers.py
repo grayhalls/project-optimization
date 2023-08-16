@@ -12,7 +12,7 @@ buffer = 1.1 # adding a 10% buffer to costs of uncompleted projects
 capex_threshold = 2500
 pending_statuses = ['Waiting for Estimate', 'Vendor Needed','Quote Requested','New Project', 'On Hold','Gathering Scope', 'Locating Vendors']
 # checks the values and updates changes for these columns
-columns_to_check = ['numbers', 'numbers6', 'numbers0', 'numbers_1', 'status19', 'status9', 'numbers05', 'numbers_15', 'numbers1']
+columns_to_check = ['numbers', 'numbers6', 'status19', 'status9', 'numbers05', 'numbers_15', 'numbers1']
 monday_data = Monday()
 new_board_id = os.getenv('new_board_id')
 board_id = os.getenv('board_id')
@@ -23,6 +23,32 @@ error_group = 'new_group'
 eligible_group = 'group_title'
 completed_group = 'new_group51572'
 ineligible_group ='new_group40156'
+
+column_mappings = {
+        'RD': ('rd', ''),
+        'id': ('text2', ''),
+        'cost': ('numbers', 0),
+        'rank': ('numbers6', 0),
+        'current_rd_budget_status': ('numbers0', 0),
+        'current_fund_budget_status': ('numbers_1', 0),
+        'Status': ('status19', ''),
+        'Priority': ('status9', ''),
+        'priority_value': ('numbers1',0),
+        'region': ('region5',''),
+        'fund': ('text',''),
+        'remaining_budget_by_rd': ('numbers05',0),
+        'remaining_budget_by_fund': ('numbers_15',0),
+        'PC': ('text8', ''),
+        'item_name': ('item_name', '')
+    }
+
+status_mapping = {
+    'High': {'text': 'High', 'value': {"index": 11}},
+    'Medium': {'text': 'Medium', 'value': {"index": 1}},
+    'Low': {'text': 'Low', 'value': {"index": 0}},
+    'EMERGENCY': {'text': 'EMERGENCY', 'value': {"index": 2}},
+    'Escalation': {'text': 'Escalation', 'value': {"index": 3}}
+}
 
 facilities = run_sql_query(facilities_sql)
 
@@ -39,9 +65,9 @@ def split_data(df):
     print('split')
     return df_in_process, df_pending
 
-def calculate_combined_costs(df_in_process, completed_df, buffer=1.1):
+def calculate_combined_costs(df_in_process, completed_df, buffer): #buffer determined at top
     df_in_process = calculate_costs(df_in_process, buffer)
-    completed_df = calculate_costs(completed_df, 1)
+    # completed_df = calculate_costs(completed_df, 1)
     df_in_process['completed'] = False 
     completed_df['completed'] = True
     print('calculated costs')
@@ -89,16 +115,19 @@ def calc_and_sort():
     assert (df_in_process['project_category'] == 'in_process').all(), "The df_in_process contains incorrect data."
     assert (df_pending['project_category'] == 'pending').all(), "The df_pending contains incorrect data."
 
-    completed_combined = calculate_combined_costs(df_in_process, completed_df)
+    completed_df = calculate_costs(completed_df, buffer=1)
+    completed_combined = calculate_combined_costs(df_in_process, completed_df, buffer)
     assert len(completed_combined) == len(df_in_process) + len(completed_df), "Data mismatch in combined dataframe."
     
-    facilities_df = gathered_budgets(completed_combined, facilities)
+    completed_budgets = gathered_budgets(completed_df, facilities)
+    expected_budgets = gathered_budgets(completed_combined, facilities) 
     expected_columns = ['RD', 'fund', 'Capex', 'facility_budget', 'spent_facility','remaining_budget', 'fund_budget', 'spent_fund','remaining_fund_budget']
-    assert all(column in facilities_df.columns for column in expected_columns), "facilities_df is missing expected columns."
+    assert all(column in expected_budgets.columns for column in expected_columns), "expected_budget is missing expected columns."
     
-    df_in_process = process_dataframes(df_in_process, facilities_df)
-    open_df = process_dataframes(df_pending, facilities_df)
+    df_in_process = process_dataframes(df_in_process, completed_budgets)
+    open_df = process_dataframes(df_pending, expected_budgets)
 
+    df_in_process = add_cumulative_budget_columns(df_in_process)
     open_df = add_cumulative_budget_columns(open_df)
     budget_columns = ['cumulative_cost', 'cumulative_fund_cost', 'remaining_budget_by_rd', 'remaining_budget_by_fund']
     assert all(column in open_df.columns for column in budget_columns), "open_df is missing budget columns after calculations."
@@ -109,28 +138,7 @@ def calc_and_sort():
     
     return open_df, df_in_process, completed_df
 
-def preprocess_df(df):
-    # Define column mappings and their default values
-    column_mappings = {
-        'RD': ('rd', ''),
-        'id': ('text2', ''),
-        'cost': ('numbers', 0),
-        'cost_effectiveness': ('numbers6', 0),
-        'current_rd_budget_status': ('numbers0', 0),
-        'current_fund_budget_status': ('numbers_1', 0),
-        'exceeds_facility_budget': ('exceeds_rd_budget5', 'N/A'),
-        'exceeds_fund_budget': ('exceeds_fund_budget2', 'N/A'),
-        'Status': ('status19', ''),
-        'Priority': ('status9', ''),
-        'priority_value': ('numbers1',0),
-        'region': ('region5',''),
-        'fund': ('text',''),
-        'remaining_budget_by_rd': ('numbers05',0),
-        'remaining_budget_by_fund': ('numbers_15',0),
-        'PC': ('text8', ''),
-        'item_name': ('item_name', '')
-    }
-
+def preprocess_df(df): #column_mappings at the top
     for original_column, (new_column, default_value) in column_mappings.items():
         # If the column exists, rename it
         if original_column in df.columns:
@@ -150,6 +158,8 @@ def preprocess_df(df):
         df['name'] = ''
     df['numbers1'] = df['numbers1'].astype(float)
     df['text2'] = df['text2'].astype(str)
+    # df['status9'] = df['status9'].map(status_mapping)
+    df['status9'] = df['status9'].map(lambda x: {"text": x, "value": status_mapping.get(x, {})})
     df['link'] = df.apply(lambda row: {"url": f"https://reddotstorage2.monday.com/boards/{board_id}/pulses/{row['text2']}", "text": row['name']}, axis=1)
 
     existing_column_names = monday_data.fetch_column_names(new_board_id)
@@ -174,18 +184,21 @@ def find_existing_rows():
     existing_items = existing_items['data']['boards'][0]['items']
     output = [
         {
-            "id": next((col["text"] for col in item["column_values"] if col["id"] == "text2"), None),
-            "group": item['group']['title'],
-            "status19": next((col["text"] for col in item["column_values"] if col["id"] == "status19"), None),
-            "item_id": item['id'],
-            "numbers": next((col["text"] for col in item["column_values"] if col["id"] == "numbers"), None),
-            "numbers6": next((col["text"] for col in item["column_values"] if col["id"] == "numbers6"), None),
-            "numbers0": next((col["text"] for col in item["column_values"] if col["id"] == "numbers0"), None),
-            "numbers_1": next((col["text"] for col in item["column_values"] if col["id"] == "numbers_1"), None),
-            "status9": next((col["text"] for col in item["column_values"] if col["id"] == "status9"), None),
-            "numbers1": next((col["text"] for col in item["column_values"] if col["id"] == "numbers1"), None),
-            "numbers05": next((col["text"] for col in item["column_values"] if col["id"] == "numbers05"), None),
-            "numbers_15": next((col["text"] for col in item["column_values"] if col["id"] == "numbers_15"), None)
+            "id": next((col["text"] for col in item["column_values"] if col["id"] == "text2"), None), #id
+            "group": item['group']['title'], #name
+            "status19": next((col["text"] for col in item["column_values"] if col["id"] == "status19"), None), #status
+            "item_id": item['id'], #new id
+            "numbers": next((col["text"] for col in item["column_values"] if col["id"] == "numbers"), None), #cost
+            "numbers6": next((col["text"] for col in item["column_values"] if col["id"] == "numbers6"), None), #ranking
+            "numbers0": next((col["text"] for col in item["column_values"] if col["id"] == "numbers0"), None),#rd budget
+            "numbers_1": next((col["text"] for col in item["column_values"] if col["id"] == "numbers_1"), None),#fund budget
+            "status9": next((col["text"] for col in item["column_values"] if col["id"] == "status9"), None), #priority
+            "numbers1": next((col["text"] for col in item["column_values"] if col["id"] == "numbers1"), None), #priority value
+            "numbers05": next((col["text"] for col in item["column_values"] if col["id"] == "numbers05"), None),#after rd budget
+            "numbers_15": next((col["text"] for col in item["column_values"] if col["id"] == "numbers_15"), None),#after fund budget
+            "text": next((col["text"] for col in item["column_values"] if col["id"] == "text"), None), #fund
+            "text8": next((col["text"] for col in item["column_values"] if col["id"] == "text8"), None), #pc
+            "rd": next((col["text"] for col in item["column_values"] if col["id"] == "rd"), None) #pc
         } 
         for item in existing_items
         ]
@@ -259,32 +272,51 @@ def update_existing_data(preprocessed_df, existing_items):
     existing_items = existing_items.to_dict(orient='records')
 
     print(f"Type of existing_items: {type(existing_items)}")  # Debug print 1
-    count =1
+    count = 1
     # Loop through each item in preprocessed_df
     for index, row in preprocessed_df.iterrows():
         matching_items = [item for item in existing_items if int(item['id']) == int(row['text2'])]
         if matching_items:
             matching_item = matching_items[0]
             for column in columns_to_check:
-                # convert string values to their appropriate type before comparison
-                value = matching_item[column]
-                if isinstance(value, float):
-                    existing_value = value
-                elif isinstance(value, str) and value.isdigit():
-                    existing_value = int(value)
+                # Handle 'status9' specially
+                if column == 'status9':
+                    existing_status_text = matching_item[column]
+                    new_status_text = row[column]['text']
+                    if existing_status_text != new_status_text:
+                        monday_data.change_item_value(new_board_id, matching_item['item_id'], column, row[column]['value'])
+                        print(f"value {row['text2']} changed in {column} from {existing_status_text} to {new_status_text}. Values changed: {count}.")
+                        count += 1
                 else:
-                    try:
-                        # try converting to a float (will fail if the string is not a number)
-                        existing_value = float(value)
-                    except ValueError:
-                        # if it's not a number, keep it as a string
+                    # Convert string values to their appropriate type before comparison
+                    value = matching_item[column]
+                    if isinstance(value, float):
                         existing_value = value
+                    elif isinstance(value, str) and value.isdigit():
+                        existing_value = int(value)
+                    else:
+                        try:
+                            # try converting to a float (will fail if the string is not a number)
+                            existing_value = float(value)
+                        except ValueError:
+                            # if it's not a number, keep it as a string
+                            existing_value = value
 
+                    if row[column] != existing_value and column != 'status9':
+                        if pd.isna(row[column]):
+                            continue
+                        monday_data.change_item_value(new_board_id, matching_item['item_id'], column, row[column])
+                        print(f"value {row['text2']} changed in {column} from {existing_value} to {row[column]}. Values changed: {count}.")
+                        count += 1
 
-                if row[column] != existing_value:
-                    print(column)
-                    print(f"values changed: {count}")
-                    if pd.isna(row[column]):
-                        continue
-                    monday_data.change_item_value(new_board_id, matching_item['item_id'], column, row[column])
-                    count += 1
+def delete_missing_items(completed_df, in_process_df, open_df, existing_items):
+    # Combine the ids from completed_df, in_process_df, and open_df
+    current_ids = set(completed_df['text2']).union(set(in_process_df['text2'])).union(set(open_df['text2']))
+
+    # Find items in existing_items that are not in current_ids
+    missing_items = existing_items[~existing_items['id'].isin(current_ids)]
+    print(len(missing_items), ' items to be deleted.')
+    # Delete the missing items from the new board
+    for _, item in missing_items.iterrows():
+        monday_data.delete_item(item['item_id'])
+        print(f"Deleted item with id: {item['item_id']} from the new board.")

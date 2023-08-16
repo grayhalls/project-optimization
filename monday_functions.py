@@ -6,7 +6,8 @@ import requests
 import numpy as np
 from typing import List, Dict
 from collections import Counter
-import json 
+# import json 
+import time
 
 class Monday:
     def __init__(self):
@@ -30,18 +31,26 @@ class Monday:
 
         # Fetch column names
         column_names = self.fetch_column_names(self.board_id)
-
+        MAX_RETRIES = 3  # maximum number of retries
+        DELAY = 10  # delay between retries in seconds
+        
         rows = []
 
         # Fetch and process items page by page
         for page in range(1, pages + 1):
-            try:
-                results = self.client.boards.fetch_items_by_board_id(board_ids=self.board_id, limit=limit, page=page)
-                data = results['data']['boards'][0]['items']
-            except Exception as e:
-                # the API client can raise
-                print(f"An error occurred while fetching items: {e}")
-                continue
+            for attempt in range(MAX_RETRIES):
+                try:
+                    results = self.client.boards.fetch_items_by_board_id(board_ids=self.board_id, limit=limit, page=page)
+                    data = results['data']['boards'][0]['items']
+                    break
+                except Exception as e:
+                    if attempt < MAX_RETRIES - 1:  # i.e., if it's not the last attempt
+                        print(f"Error occurred: {e}. Retrying in {DELAY} seconds...")
+                        time.sleep(DELAY)  # wait for the specified delay
+                    else:
+                        print(f"An error occurred while fetching items after {MAX_RETRIES} attempts: {e}")
+                        return pd.DataFrame()  # or handle the error as appropriate
+
 
             for item in data:
                 if item['group']['title'] in set(group_titles):
@@ -104,9 +113,9 @@ class Monday:
     def transform_dataframe(self, df):
         df.loc[:,'RD'] = df['RD'].replace("", np.nan)
         df['RD'] = df['RD'].fillna(df['facility'])
-        df = df[['region','id', 'RD', 'Task Type', 'Project Type', 'item_name', 'Priority', 'Status', 'PC', 'RL Link', 'Open', 'Scheduled', 'Estimated Cost', 'Quoted Cost', 'Deposit Date','Deposit Amount','Final Cost']]
+        df = df[['region','id', 'RD', 'Task Type', 'Project Type', 'Sub Project Type', 'Quantity','item_name', 'Priority', 'Status', 'PC', 'RL Link', 'Open', 'Scheduled', 'Estimated Cost', 'Quoted Cost', 'Deposit Date','Deposit Amount','Final Cost']]
         df.loc[:, 'Open'] = pd.to_datetime(df['Open']).dt.date
-        df['RD'] = df['RD'].str.strip()
+        df.loc[:, 'RD'] = df['RD'].str.strip()
 
         return df
 

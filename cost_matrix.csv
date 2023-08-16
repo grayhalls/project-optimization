@@ -1,0 +1,105 @@
+Project Type,Sub Project Type,Task Type,Avg Cost
+Alarm ,Maintenance,Facility,540.00
+Alarm ,Replacement,Facility,70.00
+Alarm ,Repair ,Facility,50.00
+Bollard ,Replacement ,Facility,950.00
+Bollard ,Repair,Facility,600.00
+Bollard ,Additional ,Facility ,950.00
+Exterior Building ,Repair ,Facility ,18.00
+Interior Building ,Repair ,Facility ,18.00
+Exterior Building ,Window ,Facility ,227.00
+Interior Building ,Repair ,Unit ,36.00
+Exterior Building ,Replacement ,Facility ,36.00
+Interior Building ,Replacement ,Facility ,36.00
+Cleaning ,Mold ,Unit ,5.00
+Cleaning ,Mold ,Facility ,5.00
+Cleaning ,Power wash ,unit ,3.00
+Cleaning ,Power wash ,Facility ,3.00
+Pest Control ,Maintenance,Facility,415.00
+OH Door,Replacement,Unit ,1898.00
+OH Door ,Repair ,Unit ,500.00
+Door Spring ,Replacement ,Unit ,211.00
+Swing Door ,Repair ,Unit ,300.00
+Swing Door , Replacement ,Unit ,1563.00
+Sliding Door ,Repair ,Facility ,791.12
+Drainage ,Additional ,Facility ,600.00
+Drainage ,Maintenance,Facility ,2400.00
+Electrical wire ,Repair ,Facility,1005.00
+Electrical Conduit ,Install/New ,Facility,3600.00
+Chain Fence ,Repair ,Facility,15.00
+Chain Fence ,Replacement ,Facility,79.17
+Wrought Iron Fence ,Repair ,Facility,10.00
+Wrought Iron Fence ,Replacement ,Facility ,40.00
+Wrought Iron Fence ,Install/New ,Facility ,40.00
+Wood Fence ,Install/New ,Facility,15.00
+Wood Fence ,Repair ,Facility,31.00
+Wood Fence ,Replacement ,Facility,40.00
+Fire Extinguisher,Maintenance,Facility,15.00
+Fire Extinguisher, Replacement,Facility,100.00
+Fire Extinguisher,Additional ,Facility,100.00
+Gate Operator ,Repair ,Facility,800.00
+Gate Operator ,Replacement ,Facility ,1200.00
+Slide gate ,Repair ,Facility,2675.00
+Piviot gate ,Repair ,Facility ,2675.00
+Slide gate ,Replacement ,Facility ,10000.00
+Piviot gate ,Replacement ,Facility ,8000.00
+Gate PTI ,Install/New ,Facility,6863.00
+Snow Gate ,Repair,Facility ,900.00
+Snow gate ,Replacement ,Facility ,1200.00
+Gate Key Pad ,Keypad ,Facility ,500.00
+Pedestrian Gate,Repair ,Facility ,900.00
+Pedestrian Gate,Install/New ,Facility ,1900.00
+Gravel ,Gravel Grading,Facility,1.35
+Gravel ,Additional ,Facility,2.00
+Gutter ,Gutter Guards,Facility,6.00
+Gutter ,Repair,Facility,10.00
+Gutter ,Replacement ,Facility,14.00
+HVAC ,Repair ,Facility,2500.00
+HVAC ,Replacement ,Facility,12000.00
+HVAC , Maintenance,Facility,0.00
+Interior Lighting ,Interior Lighting CC building ,Facility,300.00
+LED Lighting ,Install/New ,Facility,118.00
+LED Lighting ,Repair ,Facility,200.00
+LED Lighting ,LED Retrofit,Facility,250.00
+Solar Lighting ,Repair ,Facility,300.00
+Non-LED Lighting ,Repair ,Facility,250.00
+Non-LED Lighting ,Replacement ,Facility ,200.00
+Paint ,Paint Door ,Unit ,2.00
+Paint ,Exterior Building ,Facility ,2.00
+Paving ,Concrete- Lay ,Facility,7.00
+Paving ,Concrete- Repair ,Facility,2.00
+Paving ,Asphalt Mill and Overlay ,Facility,3.50
+Paving ,Asphalt Sealcoating,Facility,0.40
+Paving ,Asphalt Repair ,Facility,1.00
+Plumbing ,Repair ,Facility,500.00
+Plumbing ,replacement,Facility ,1000.00
+Roof ,Repair ,Unit ,0.07
+Roof ,Replacement ,Facility,5.00
+Signage ,Pole Sign Reface ,Facility,18000.00
+Signage ,Monument Sign Reface ,Facility,14000.00
+Signage ,Pole Sign - New ,Facility,11000.00
+Signage ,Monument Sign new ,Facility,7000.00
+Signage ,Channel Letter New ,Facility,11000.00
+Signage ,Unit numbers ,Facility,5.00
+Signage ,Property Signs ,Facility,78.00
+Signage ,Vendor Property Sign ,Facility,1000.00
+Telecom,Upgrade ,Facility,143.00
+Telecom,Internet outage ,Facility,0.00
+Telecom,Invoice Issues ,Facility,0.00
+Telecom ,Contract renewal ,Facility ,0.00
+Landscaping ,Weed Control ,Facility ,150.00
+Landscaping ,Tree Trimming ,Facility,1200.00
+Landscaping ,Vegeation Control / Clean up ,Facility,1200.00
+Landscaping ,Tree Removal,Facility,1800.00
+Landscaping ,Shrub Trimming,Facility,500.00
+Utilites ,Cancel Dumpster Contract ,Facility,0.00
+Utilites ,Power line ,Facility,0.00
+Utilites ,Lighting Issues - City ,Facility,0.00
+Utilites ,Invoice Issues ,Facility,0.00
+Plumbing ,Backflow ,Facility,1000.00
+Utilites ,Water  turn off ,Facility,0.00
+Video Surveillance ,Repair ,Facility,150.00
+Video Surveillance ,Replacement ,Facility,230.00
+Video Surveillance ,DVR Replace ,Facility,400.00
+New Property ,Closing and DD ,Facility ,0.00
+Facility Map ,Update ,,0.00

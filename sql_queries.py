@@ -30,7 +30,7 @@ def run_sql_query(sql_query):
     return df 
 
 tasks_to_units = '''
-	select f.site_code, u.unit_number, t.id as task_id
+	select f.site_code, u.unit_number, t.id as task_id, u.occupied
     from units u 
     inner join facilities f on f.id = u.facility_id
     inner join tasks t on t.taskable_id = u.id and t.taskable_type = 'Unit'
