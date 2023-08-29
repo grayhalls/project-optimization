@@ -53,7 +53,7 @@ def add_values_to_projects():
     values= grab_unit_values()
     assert not values.empty, "values DataFrame is empty."
     
-    unit_projects = monday_data.generate_subitem_df(board_id)
+    unit_projects = monday_data.generate_subitem_df(board_id, groups=['South', 'North', 'Central'], columns=["dropdown3", "status", "text4"])
     assert not unit_projects.empty, "unit_projects DataFrame is empty."
     unit_projects['task_id'] = pd.to_numeric(unit_projects['link'].str.split('/').str[-1], errors='coerce').fillna(0).astype('int64')
     

@@ -6,7 +6,7 @@ import requests
 import numpy as np
 from typing import List, Dict
 from collections import Counter
-# import json 
+import json 
 import time
 
 class Monday:
@@ -15,13 +15,15 @@ class Monday:
         self.api_key = os.getenv('api_key')
         self.board_id = os.getenv('board_id') 
         self.new_board_id = os.getenv('new_board_id')
+        self.opc_board_id = os.getenv('opc_board_id')
+        self.hauling_board_id = os.getenv('hauling_board_id')
         self.client = MondayClient(self.api_key)
         self.headers = {"Authorization" : self.api_key}
         self.url = "https://api.monday.com/v2"
 
-    def fetch_items(self, group_titles, all_groups=['North', 'South', 'Central', 'Complete']):
+    def fetch_items(self, board, group_titles, all_groups=['North', 'South', 'Central', 'Complete']):
         # Calculate the total number of items
-        total_items = self.count_items_in_groups(all_groups)
+        total_items = self.count_items_in_groups(board, all_groups)
         if total_items <=1000:
             limit = total_items
         else:
@@ -30,7 +32,7 @@ class Monday:
         pages = (total_items // limit) + 1
 
         # Fetch column names
-        column_names = self.fetch_column_names(self.board_id)
+        column_names = self.fetch_column_names(board)
         MAX_RETRIES = 3  # maximum number of retries
         DELAY = 10  # delay between retries in seconds
         
@@ -40,7 +42,7 @@ class Monday:
         for page in range(1, pages + 1):
             for attempt in range(MAX_RETRIES):
                 try:
-                    results = self.client.boards.fetch_items_by_board_id(board_ids=self.board_id, limit=limit, page=page)
+                    results = self.client.boards.fetch_items_by_board_id(board_ids=board, limit=limit, page=page)
                     data = results['data']['boards'][0]['items']
                     break
                 except Exception as e:
@@ -59,7 +61,7 @@ class Monday:
             
         df = pd.DataFrame(rows)
 
-        df = self.transform_dataframe(df)  # Moved dataframe manipulation to a separate function
+        df = self.transform_dataframe(df, board)  # Moved dataframe manipulation to a separate function
 
         return df
     
@@ -73,9 +75,9 @@ class Monday:
         column_names = {column['id']: column['title'] for column in data}
         return column_names
 
-    def count_items_in_groups(self, group_titles: List[str]) -> int:
+    def count_items_in_groups(self, board, group_titles: List[str]) -> int:
         # Fetch all groups on the board
-        groups = self.client.groups.get_groups_by_board(self.board_id)
+        groups = self.client.groups.get_groups_by_board(board)
         
         # Filter out the groups with matching titles
         relevant_groups = [group for group in groups['data']['boards'][0]['groups'] 
@@ -85,7 +87,7 @@ class Monday:
         total_items = 0
         for group in relevant_groups:
             group_id = group['id']
-            group_items = self.client.groups.get_items_by_group(self.board_id, group_id)
+            group_items = self.client.groups.get_items_by_group(board, group_id)
             total_items += len(group_items['data']['boards'][0]['groups'][0]['items'])
 
         return total_items
@@ -110,13 +112,18 @@ class Monday:
 
         return row
     
-    def transform_dataframe(self, df):
+    def transform_dataframe(self, df, board):
         df.loc[:,'RD'] = df['RD'].replace("", np.nan)
         df['RD'] = df['RD'].fillna(df['facility'])
-        df = df[['region','id', 'RD', 'Task Type', 'Project Type', 'Sub Project Type', 'Quantity','item_name', 'Priority', 'Status', 'PC', 'RL Link', 'Open', 'Scheduled', 'Estimated Cost', 'Quoted Cost', 'Deposit Date','Deposit Amount','Final Cost']]
-        df.loc[:, 'Open'] = pd.to_datetime(df['Open']).dt.date
+        if board == self.board_id:
+            df = df[['region','id', 'RD', 'Task Type', 'Project Type', 'Sub Project Type', 'Quantity','item_name', 'Priority', 'Status', 'PC', 'RL Link', 'Open', 'Scheduled', 'Estimated Cost', 'Quoted Cost', 'Deposit Date','Deposit Amount','Final Cost']]
+            df.loc[:, 'Open'] = pd.to_datetime(df['Open']).dt.date
+        elif board == self.opc_board_id:
+            df = df[['region','id', 'RD', 'Task Type', 'Project Type', 'Sub Project Type', 'Quantity','item_name', 'Priority', 'Open', 'Status', 'People', 'RL Link', 'Scheduled', 'Estimated Cost', 'Quoted Cost', 'Final Cost']]
+            df.loc[:, 'Open'] = pd.to_datetime(df['Open']).dt.date
+        elif board == self.hauling_board_id:
+            df=df[['region','id', 'RD', 'item_name', 'Vendor']]
         df.loc[:, 'RD'] = df['RD'].str.strip()
-
         return df
 
     def delete_item(self, item_id):
@@ -200,14 +207,14 @@ class Monday:
                 except Exception as e:
                     print(f"Error deleting item: {e}")
 
-    def query_items(self, board_id):
+    def query_items(self, board_id, columns):
         headers = {
             'Authorization': self.api_key,
             'Content-Type': 'application/json',
         }
 
         query = """
-            query ($boardId: [Int]) {
+            query ($boardId: [Int], $columns: [String]) {
                 boards (ids: $boardId) {
                     items {
                         id
@@ -215,7 +222,7 @@ class Monday:
                         group {
                             title
                         }
-                        column_values(ids: ["dropdown3", "status", "text4"]) {
+                        column_values(ids: $columns) {
                             id
                             text
                             value
@@ -225,7 +232,7 @@ class Monday:
             }
         """
 
-        variables = {'boardId': [int(board_id)]}
+        variables = {'boardId': [int(board_id)], 'columns': columns}
 
         data = {'query': query, 'variables': variables}
 
@@ -262,10 +269,10 @@ class Monday:
         response_json = response.json()
         return response_json
     
-    def generate_subitem_df(self, board_id, groups=['South', 'North', 'Central']):
+    def generate_subitem_df(self, board_id, groups=['South', 'North', 'Central'], columns=[]):
         data_for_df = []
 
-        items_results = self.query_items(board_id)
+        items_results = self.query_items(board_id, columns = columns)
         assert items_results is not None, "items_results is None"
 
         items_data = items_results.get('data', {}).get('boards', [])[0].get('items', [])
@@ -308,8 +315,60 @@ class Monday:
         assert not df.empty, "DataFrame is empty"
 
         return df
+    
+    def create_subitem(self, parent_item_id, item_name):
+        headers = {
+            'Authorization': self.api_key,
+            'Content-Type': 'application/json',
+        }
 
+        query = """
+            mutation ($parentItemId: Int, $itemName: String) {
+                create_subitem (parent_item_id: $parentItemId, item_name: $itemName) {
+                    id
+                    board {
+                        id
+                    }
+                }
+            }
+        """
 
+        variables = {'parentItemId': parent_item_id, 'itemName': item_name}
+
+        data = {'query': query, 'variables': variables}
+        response = requests.post('https://api.monday.com/v2', headers=headers, json=data)
+        response_json = response.json()
+        
+        return response_json.get("data", {}).get("create_subitem", {}).get("id")  # Returning subitem ID for further operations if needed
+
+    def update_subitem_column_values(self, subitem_id, link, replace_value):
+        headers = {
+            'Authorization': self.api_key,
+            'Content-Type': 'application/json',
+        }
+        new_board = self.new_board_id
+        column_values = {
+            "link": link,
+            "numbers": replace_value
+        }
+
+        query = """
+            mutation ($itemId: Int, $columnValues: JSON!) {
+                change_multiple_column_values(
+                    board_id: $newBoard,  # Replace with your board ID or fetch dynamically if needed
+                    item_id: $itemId, 
+                    column_values: $columnValues
+                ) {
+                    id
+                }
+            }
+        """
+
+        variables = {'itemId': subitem_id, 'columnValues': json.dumps(column_values),'newBoard': new_board}
+
+        data = {'query': query, 'variables': variables}
+        response = requests.post('https://api.monday.com/v2', headers=headers, json=data)
+        response_json = response.json()
 
                   
 

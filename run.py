@@ -1,10 +1,18 @@
 from monday_push_helpers import calc_and_sort, preprocessing, find_existing_rows, \
     move_between_groups, create_missing_items, update_existing_data, delete_missing_items
 import time 
-initial = time.time()
+# import os
+# from dotenv import load_dotenv
+# load_dotenv()
+# MASTER_ACCESS_KEY = os.getenv("MASTER_ACCESS_KEY")
+# MASTER_SECRET = os.getenv("MASTER_SECRET")
+# print(MASTER_ACCESS_KEY)
+# print(MASTER_SECRET)
 
+initial = time.time()
 # runs the ranking optimization over the available projects
 # also calculates remaining budgets
+
 open_df, in_process_df, completed_df = calc_and_sort() # takes a few mins to fetch from project board
 print('calc_and_sort() took', round((time.time()-initial)/60,2), 'minutes.')
 # preps data to match with monday's column ids and data types

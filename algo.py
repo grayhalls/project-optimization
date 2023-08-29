@@ -97,14 +97,20 @@ def calc_cost_effectiveness(df):
     
     values = add_values_to_projects()
     avg_value = values['replace_value'].mean()
-    max_value = values['replace_value'].max()
-    values.loc[values['occupied'] == True, 'replace_value'] = max_value
+    # max_value = values['replace_value'].max()
+    # values.loc[values['occupied'] == True, 'replace_value'] = max_value
 
-    values = values[['item_id', 'replace_value']]
+    alpha = values[['item_id', 'replace_value']]
 
-    alpha = values.groupby(['item_id']).mean()/avg_value
+    alpha = alpha.groupby(['item_id']).mean()
+    count = values.groupby(['item_id']).count().reset_index()
+    count = count[['item_id', 'subitem_id']]
+
+    alpha['alpha'] = alpha['replace_value']/avg_value
     alpha = alpha.reset_index()
-    alpha = alpha.rename(columns = {'item_id':'id', 'replace_value':'alpha'})
+
+    alpha = alpha.merge(count, on = ['item_id'], how = 'left')
+    alpha = alpha.rename(columns = {'item_id':'id', 'subitem_id':'unit_count', 'replace_value':'avg_unit_value'})
 
     # Apply the function to each row of the DataFrame
     mask = df['Task Type'] == 'Unit'
@@ -115,6 +121,8 @@ def calc_cost_effectiveness(df):
 
     df_not_unit = df[~mask]
     df_not_unit['priority_value'] = df_not_unit.apply(lambda row: priority_value(row), axis=1)
+    df_not_unit['alpha'] = 1
+    df_not_unit['avg_unit_value'] = "NaN"
 
     # Concatenate the dataframes back together
     df = pd.concat([df_unit, df_not_unit])

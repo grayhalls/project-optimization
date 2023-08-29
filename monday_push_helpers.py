@@ -12,7 +12,7 @@ buffer = 1.1 # adding a 10% buffer to costs of uncompleted projects
 capex_threshold = 2500
 pending_statuses = ['Waiting for Estimate', 'Vendor Needed','Quote Requested','New Project', 'On Hold','Gathering Scope', 'Locating Vendors']
 # checks the values and updates changes for these columns
-columns_to_check = ['numbers', 'numbers6', 'status19', 'status9', 'numbers05', 'numbers_15', 'numbers1']
+columns_to_check = ['numbers', 'numbers6', 'status19', 'status9', 'numbers05', 'numbers_15', 'numbers1', 'numbers7']
 monday_data = Monday()
 new_board_id = os.getenv('new_board_id')
 board_id = os.getenv('board_id')
@@ -39,15 +39,18 @@ column_mappings = {
         'remaining_budget_by_rd': ('numbers05',0),
         'remaining_budget_by_fund': ('numbers_15',0),
         'PC': ('text8', ''),
-        'item_name': ('item_name', '')
+        'item_name': ('item_name', ''),
+        'avg_unit_value':('numbers7',''),
+        'team':('dropdown','')
     }
 
 status_mapping = {
-    'High': {'text': 'High', 'value': {"index": 11}},
-    'Medium': {'text': 'Medium', 'value': {"index": 1}},
-    'Low': {'text': 'Low', 'value': {"index": 0}},
-    'EMERGENCY': {'text': 'EMERGENCY', 'value': {"index": 2}},
-    'Escalation': {'text': 'Escalation', 'value': {"index": 3}}
+    'High': {"index": 11},
+    'Medium': {"index": 1},
+    'Low': {"index": 0},
+    'EMERGENCY': {"index": 2},
+    'Escalation': {"index": 3},
+    '':{"index":0}
 }
 
 facilities = run_sql_query(facilities_sql)
@@ -56,7 +59,8 @@ def fetch_data():
     print("Fetching project board...takes up to 3 mins.")
     completed = monday_data.fetch_items(['Complete'])
     open_data = monday_data.fetch_items(['North', 'South', 'Central'], all_groups=['North', 'South', 'Central'])
-    print('fetched')
+    print('fetched CIPC Boards')
+
     return completed, open_data
 
 def split_data(df):
@@ -158,6 +162,8 @@ def preprocess_df(df): #column_mappings at the top
         df['name'] = ''
     df['numbers1'] = df['numbers1'].astype(float)
     df['text2'] = df['text2'].astype(str)
+    df['numbers7'].replace('','NaN', inplace=True)
+    df['numbers7']=df['numbers7'].astype(float)
     # df['status9'] = df['status9'].map(status_mapping)
     df['status9'] = df['status9'].map(lambda x: {"text": x, "value": status_mapping.get(x, {})})
     df['link'] = df.apply(lambda row: {"url": f"https://reddotstorage2.monday.com/boards/{board_id}/pulses/{row['text2']}", "text": row['name']}, axis=1)
@@ -166,7 +172,7 @@ def preprocess_df(df): #column_mappings at the top
 
     # Find the columns to drop
     columns_to_drop = set(df.columns) - set(existing_column_names)
-
+    print(columns_to_drop)
     # Drop the columns
     df = df.drop(columns=columns_to_drop)
     return df
@@ -198,7 +204,9 @@ def find_existing_rows():
             "numbers_15": next((col["text"] for col in item["column_values"] if col["id"] == "numbers_15"), None),#after fund budget
             "text": next((col["text"] for col in item["column_values"] if col["id"] == "text"), None), #fund
             "text8": next((col["text"] for col in item["column_values"] if col["id"] == "text8"), None), #pc
-            "rd": next((col["text"] for col in item["column_values"] if col["id"] == "rd"), None) #pc
+            "rd": next((col["text"] for col in item["column_values"] if col["id"] == "rd"), None), #pc
+            "numbers7": next((col["text"] for col in item["column_values"] if col["id"] == "numbers7"), None), #unit values
+            "dropdown": next((col["text"] for col in item["column_values"] if col["id"] == "dropdown"), None) # team
         } 
         for item in existing_items
         ]
@@ -216,6 +224,7 @@ def find_existing_rows():
     df['numbers1'] = df['numbers1'].astype(float)
     df['numbers05'] = df['numbers05'].astype(int)
     df['numbers_15'] = df['numbers_15'].astype(int)
+    df['numbers7'] =df['numbers7'].astype(float)
     
     return df
 
@@ -271,20 +280,26 @@ def create_missing_items(completed_df, in_process_df, open_df, existing_items):
 def update_existing_data(preprocessed_df, existing_items):
     existing_items = existing_items.to_dict(orient='records')
 
-    print(f"Type of existing_items: {type(existing_items)}")  # Debug print 1
+    # print(f"Type of existing_items: {type(existing_items)}")
     count = 1
-    # Loop through each item in preprocessed_df
+
     for index, row in preprocessed_df.iterrows():
         matching_items = [item for item in existing_items if int(item['id']) == int(row['text2'])]
+        
         if matching_items:
             matching_item = matching_items[0]
+            
             for column in columns_to_check:
                 # Handle 'status9' specially
                 if column == 'status9':
                     existing_status_text = matching_item[column]
                     new_status_text = row[column]['text']
+                    
                     if existing_status_text != new_status_text:
-                        monday_data.change_item_value(new_board_id, matching_item['item_id'], column, row[column]['value'])
+                        new_status_value = status_mapping[new_status_text]
+                        # print(f"Attempting to change item {matching_item['item_id']} with value {new_status_value}") # Debug print
+                        monday_data.change_item_value(new_board_id, matching_item['item_id'], column, new_status_value)
+                        
                         print(f"value {row['text2']} changed in {column} from {existing_status_text} to {new_status_text}. Values changed: {count}.")
                         count += 1
                 else:
