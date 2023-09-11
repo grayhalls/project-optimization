@@ -15,7 +15,9 @@ pending_statuses = ['Waiting for Estimate', 'Vendor Needed','Quote Requested','N
 columns_to_check = ['numbers', 'numbers6', 'status19', 'status9', 'numbers05', 'numbers_15', 'numbers1', 'numbers7']
 monday_data = Monday()
 new_board_id = os.getenv('new_board_id')
-board_id = os.getenv('board_id')
+cipc_board_id = os.getenv('board_id')
+opc_board_id = os.getenv('opc_board_id')
+hauling_board_id = os.getenv('hauling_board_id')
 
 # group ids
 in_process_group = 'topics'
@@ -57,11 +59,14 @@ facilities = run_sql_query(facilities_sql)
 
 def fetch_data():
     print("Fetching project board...takes up to 3 mins.")
-    completed = monday_data.fetch_items(['Complete'])
-    open_data = monday_data.fetch_items(['North', 'South', 'Central'], all_groups=['North', 'South', 'Central'])
+    completed = monday_data.fetch_items(board = cipc_board_id, group_titles=['Complete'])
+    open_data = monday_data.fetch_items(board = cipc_board_id, group_titles=['North', 'South', 'Central'], all_groups=['North', 'South', 'Central'])
     print('fetched CIPC Boards')
-
-    return completed, open_data
+    opc_open = monday_data.fetch_items(board = opc_board_id, group_titles=['North', 'South', 'Central'], all_groups=['North', 'South', 'Central'])
+    opc_completed = monday_data.fetch_items(board = opc_board_id, group_titles=['Complete'])
+    hauling = monday_data.fetch_items(hauling_board_id, group_titles=['Unit Haul List'],all_groups=['Vehicle Towing','Unit Haul List'])
+    print('fetched OPC Boards')
+    return completed, open_data, opc_open, opc_completed, hauling
 
 def split_data(df):
     df_in_process = df[df['project_category'] == 'in_process']
@@ -109,7 +114,7 @@ def add_cumulative_budget_columns(df):
     })
 
 def calc_and_sort():
-    completed_df, open_df = fetch_data()
+    completed_df, open_df, opc_open, opc_completed, hauling = fetch_data()
     assert not completed_df.empty, "The completed_df dataframe is empty."
     assert not open_df.empty, "The open_df dataframe is empty."
     

@@ -119,12 +119,21 @@ class Monday:
             df = df[['region','id', 'RD', 'Task Type', 'Project Type', 'Sub Project Type', 'Quantity','item_name', 'Priority', 'Status', 'PC', 'RL Link', 'Open', 'Scheduled', 'Estimated Cost', 'Quoted Cost', 'Deposit Date','Deposit Amount','Final Cost']]
             df.loc[:, 'Open'] = pd.to_datetime(df['Open']).dt.date
         elif board == self.opc_board_id:
-            df = df[['region','id', 'RD', 'Task Type', 'Project Type', 'Sub Project Type', 'Quantity','item_name', 'Priority', 'Open', 'Status', 'People', 'RL Link', 'Scheduled', 'Estimated Cost', 'Quoted Cost', 'Final Cost']]
+            df = df[['region','id', 'RD', 'Task Type', 'Project Type', 'Sub Project Type', 'Quantity','item_name', 'Priority', 'Open', 'Status', 'People', 'RL Link', 'Scheduled', 'Estimated Cost', 'Quoted Cost', 'Final Cost', 'Completion Date']]
+            
+            mask = (
+                (df['Completion Date'].astype(str).eq("")) |
+                (pd.to_datetime(df['Completion Date']) >= pd.Timestamp('2023-06-01'))
+            )
+            df = df[mask]
+
+            df = df.reset_index(drop=True)
             df.loc[:, 'Open'] = pd.to_datetime(df['Open']).dt.date
         elif board == self.hauling_board_id:
             df=df[['region','id', 'RD', 'item_name', 'Vendor']]
         df.loc[:, 'RD'] = df['RD'].str.strip()
         return df
+
 
     def delete_item(self, item_id):
         self.client.items.delete_item_by_id(item_id)  

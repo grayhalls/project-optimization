@@ -85,7 +85,7 @@ def calculate_costs(df, buffer=1):
     return df
 
 
-def calc_cost_effectiveness(df):
+def calc_cost_effectiveness(df, unit_values = True):
     now = date.today()
     # Calculate the number of weeks since 'Open' date
     df = df.copy()
@@ -94,38 +94,42 @@ def calc_cost_effectiveness(df):
     
     # Calculate the cost for each project
     df = calculate_costs(df)
-    
-    values = add_values_to_projects()
-    avg_value = values['replace_value'].mean()
-    # max_value = values['replace_value'].max()
-    # values.loc[values['occupied'] == True, 'replace_value'] = max_value
+    if unit_values == True:
+        values = add_values_to_projects()
+        avg_value = values['replace_value'].mean()
+        # max_value = values['replace_value'].max()
+        # values.loc[values['occupied'] == True, 'replace_value'] = max_value
 
-    alpha = values[['item_id', 'replace_value']]
+        alpha = values[['item_id', 'replace_value']]
 
-    alpha = alpha.groupby(['item_id']).mean()
-    count = values.groupby(['item_id']).count().reset_index()
-    count = count[['item_id', 'subitem_id']]
+        alpha = alpha.groupby(['item_id']).mean()
+        count = values.groupby(['item_id']).count().reset_index()
+        count = count[['item_id', 'subitem_id']]
 
-    alpha['alpha'] = alpha['replace_value']/avg_value
-    alpha = alpha.reset_index()
+        alpha['alpha'] = alpha['replace_value']/avg_value
+        alpha = alpha.reset_index()
 
-    alpha = alpha.merge(count, on = ['item_id'], how = 'left')
-    alpha = alpha.rename(columns = {'item_id':'id', 'subitem_id':'unit_count', 'replace_value':'avg_unit_value'})
+        alpha = alpha.merge(count, on = ['item_id'], how = 'left')
+        alpha = alpha.rename(columns = {'item_id':'id', 'subitem_id':'unit_count', 'replace_value':'avg_unit_value'})
 
-    # Apply the function to each row of the DataFrame
-    mask = df['Task Type'] == 'Unit'
-    df_unit = df[mask]
-    df_unit = df_unit.merge(alpha, on='id', how='left')
-    df_unit['alpha'] = df_unit['alpha'].fillna(1)
-    df_unit['priority_value'] = df_unit.apply(lambda row: priority_value(row), axis=1) * df_unit['alpha']
+        # Apply the function to each row of the DataFrame
+        mask = df['Task Type'] == 'Unit'
+        df_unit = df[mask]
+        df_unit = df_unit.merge(alpha, on='id', how='left')
+        df_unit['alpha'] = df_unit['alpha'].fillna(1)
+        df_unit['priority_value'] = df_unit.apply(lambda row: priority_value(row), axis=1) * df_unit['alpha']
 
-    df_not_unit = df[~mask]
+        df_not_unit = df[~mask]
+    else:
+        df_not_unit = df 
+
     df_not_unit['priority_value'] = df_not_unit.apply(lambda row: priority_value(row), axis=1)
     df_not_unit['alpha'] = 1
     df_not_unit['avg_unit_value'] = "NaN"
-
-    # Concatenate the dataframes back together
-    df = pd.concat([df_unit, df_not_unit])
+    
+    if df_unit:
+        # Concatenate the dataframes back together
+        df = pd.concat([df_unit, df_not_unit])
 
     # Calculate cost-effectiveness
     df['cost_effectiveness'] = np.where(df['cost']=="", 0, np.divide(df['priority_value'], df['cost'], where=df['cost'] !=0))
