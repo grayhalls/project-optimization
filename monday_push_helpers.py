@@ -4,6 +4,7 @@ from sql_queries import run_sql_query, facilities_sql
 from helpers import remaining_facility, remaining_fund, categorize_projects
 from algo import calculate_costs, calc_cost_effectiveness
 import os
+import json
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -281,10 +282,12 @@ def update_existing_data(preprocessed_df, existing_items):
             for column in columns_to_check:
                 # Handle 'status9' specially
                 if column == 'status9':
+
                     existing_status_text = matching_item[column]
                     new_status_text = row[column]['text']
                     if existing_status_text != new_status_text:
-                        monday_data.change_item_value(new_board_id, matching_item['item_id'], column, row[column]['value'])
+                        value = row[column]['value']['value']
+                        monday_data.change_item_value(new_board_id, matching_item['item_id'], column, value)
                         print(f"value {row['text2']} changed in {column} from {existing_status_text} to {new_status_text}. Values changed: {count}.")
                         count += 1
                 else:
