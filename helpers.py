@@ -120,3 +120,6 @@ def remaining_fund(remaining_by_facility):
 def categorize_projects(df, pending_statuses):
     df['project_category'] = df['Status'].apply(lambda x: 'pending' if x in pending_statuses else 'in_process')
     return df
+
+def 
+

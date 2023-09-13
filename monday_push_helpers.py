@@ -11,6 +11,7 @@ load_dotenv()
 buffer = 1.1 # adding a 10% buffer to costs of uncompleted projects
 capex_threshold = 2500
 pending_statuses = ['Waiting for Estimate', 'Vendor Needed','Quote Requested','New Project', 'On Hold','Gathering Scope', 'Locating Vendors']
+pending_statuses_opc = ['New Project', 'Vendor Needed', 'Waiting for Estimate/Proof', 'On Hold', 'Denied']
 # checks the values and updates changes for these columns
 columns_to_check = ['numbers', 'numbers6', 'status19', 'status9', 'numbers05', 'numbers_15', 'numbers1', 'numbers7']
 monday_data = Monday()
@@ -64,9 +65,9 @@ def fetch_data():
     print('fetched CIPC Boards')
     opc_open = monday_data.fetch_items(board = opc_board_id, group_titles=['North', 'South', 'Central'], all_groups=['North', 'South', 'Central'])
     opc_completed = monday_data.fetch_items(board = opc_board_id, group_titles=['Complete'])
-    hauling = monday_data.fetch_items(hauling_board_id, group_titles=['Unit Haul List'],all_groups=['Vehicle Towing','Unit Haul List'])
+    # hauling = monday_data.fetch_items(hauling_board_id, group_titles=['Unit Haul List'],all_groups=['Vehicle Towing','Unit Haul List'])
     print('fetched OPC Boards')
-    return completed, open_data, opc_open, opc_completed, hauling
+    return completed, open_data, opc_open, opc_completed #, hauling
 
 def split_data(df):
     df_in_process = df[df['project_category'] == 'in_process']
@@ -119,12 +120,15 @@ def calc_and_sort():
     assert not open_df.empty, "The open_df dataframe is empty."
     
     open_df = categorize_projects(open_df, pending_statuses)
+    opc_open = categorize_projects(opc_open, pending_statuses_opc)
     
     df_in_process, df_pending = split_data(open_df)
+    opc_in_process, opc_pending = split_data(opc_open)
     assert (df_in_process['project_category'] == 'in_process').all(), "The df_in_process contains incorrect data."
     assert (df_pending['project_category'] == 'pending').all(), "The df_pending contains incorrect data."
 
     completed_df = calculate_costs(completed_df, buffer=1)
+    opc_comp_costs =calculate_costs(opc_completed, buffer=1)
     completed_combined = calculate_combined_costs(df_in_process, completed_df, buffer)
     assert len(completed_combined) == len(df_in_process) + len(completed_df), "Data mismatch in combined dataframe."
     
@@ -133,6 +137,14 @@ def calc_and_sort():
     expected_columns = ['RD', 'fund', 'Capex', 'facility_budget', 'spent_facility','remaining_budget', 'fund_budget', 'spent_fund','remaining_fund_budget']
     assert all(column in expected_budgets.columns for column in expected_columns), "expected_budget is missing expected columns."
     
+    opc_pending = calc_cost_effectiveness(opc_pending)
+    opc_in_process = calc_cost_effectiveness(opc_in_process)
+    cipc_in_process = calc_cost_effectiveness(df_in_process)
+    cipc_pending = calc_cost_effectiveness(df_pending)
+
+    #concat pending and in_process dfs separately
+    df_in_process = pd.concat([cipc_in_process, opc_in])
+
     df_in_process = process_dataframes(df_in_process, completed_budgets)
     open_df = process_dataframes(df_pending, expected_budgets)
 

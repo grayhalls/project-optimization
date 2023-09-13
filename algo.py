@@ -127,7 +127,7 @@ def calc_cost_effectiveness(df, unit_values = True):
     df_not_unit['alpha'] = 1
     df_not_unit['avg_unit_value'] = "NaN"
     
-    if df_unit:
+    if unit_values ==True:
         # Concatenate the dataframes back together
         df = pd.concat([df_unit, df_not_unit])
 
@@ -137,6 +137,9 @@ def calc_cost_effectiveness(df, unit_values = True):
     # Normalize cost_effectiveness to be out of 100
     df['cost_effectiveness'] = df['cost_effectiveness'].astype(float)
 
+    return df
+
+def calculate_rank(df):
     # Rank based on cost_effectiveness from highest to lowest
     df['rank'] = df['cost_effectiveness'].rank(method='first', ascending=False)
 
