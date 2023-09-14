@@ -55,7 +55,7 @@ def find_cost(row):
     elif pd.notnull(row['Quoted Cost']) and row['Quoted Cost'] != "":
         return row['Quoted Cost']
     elif pd.notnull(row['Estimated Cost']) and row['Estimated Cost'] != "":
-        if row['Estimated Cost'] == 0:
+        if row['Estimated Cost'] == '0':
             return 1
         else:
             return row['Estimated Cost']
