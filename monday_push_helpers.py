@@ -57,8 +57,19 @@ def fetch_data():
     print("Fetching project board...takes up to 3 mins.")
     completed = monday_data.fetch_items(['Complete'])
     open_data = monday_data.fetch_items(['North', 'South', 'Central'], all_groups=['North', 'South', 'Central'])
+    
+    # Filter rows with 'status' == 'Compete' from open_data
+    to_move = open_data[open_data['Status'] == 'Compete']
+    
+    # Append these rows to completed dataframe
+    completed = pd.concat([completed, to_move], ignore_index=True)
+    
+    # Drop these rows from open_data dataframe
+    open_data = open_data[open_data['status'] != 'Compete']
+    
     print('fetched')
     return completed, open_data
+
 
 def split_data(df):
     df_in_process = df[df['project_category'] == 'in_process']
