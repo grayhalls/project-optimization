@@ -65,7 +65,7 @@ def fetch_data():
     completed = pd.concat([completed, to_move], ignore_index=True)
     
     # Drop these rows from open_data dataframe
-    open_data = open_data[open_data['status'] != 'Compete']
+    open_data = open_data[open_data['Status'] != 'Compete']
     
     print('fetched')
     return completed, open_data
