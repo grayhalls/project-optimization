@@ -4,6 +4,7 @@ from sql_queries import run_sql_query, facilities_sql
 from helpers import remaining_facility, remaining_fund, categorize_projects
 from algo import calculate_costs, calc_cost_effectiveness
 import os
+import json
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -62,12 +63,23 @@ def fetch_data():
     print("Fetching project board...takes up to 3 mins.")
     completed = monday_data.fetch_items(board = cipc_board_id, group_titles=['Complete'])
     open_data = monday_data.fetch_items(board = cipc_board_id, group_titles=['North', 'South', 'Central'], all_groups=['North', 'South', 'Central'])
+    
+    # Filter rows with 'status' == 'Compete' from open_data
+    to_move = open_data[open_data['Status'] == 'Compete']
+    
+    # Append these rows to completed dataframe
+    completed = pd.concat([completed, to_move], ignore_index=True)
+    
+    # Drop these rows from open_data dataframe
+    open_data = open_data[open_data['Status'] != 'Compete']
+    
     print('fetched CIPC Boards')
     opc_open = monday_data.fetch_items(board = opc_board_id, group_titles=['North', 'South', 'Central'], all_groups=['North', 'South', 'Central'])
     opc_completed = monday_data.fetch_items(board = opc_board_id, group_titles=['Complete'])
     # hauling = monday_data.fetch_items(hauling_board_id, group_titles=['Unit Haul List'],all_groups=['Vehicle Towing','Unit Haul List'])
     print('fetched OPC Boards')
     return completed, open_data, opc_open, opc_completed #, hauling
+
 
 def split_data(df):
     df_in_process = df[df['project_category'] == 'in_process']
@@ -309,14 +321,12 @@ def update_existing_data(preprocessed_df, existing_items):
             for column in columns_to_check:
                 # Handle 'status9' specially
                 if column == 'status9':
+
                     existing_status_text = matching_item[column]
                     new_status_text = row[column]['text']
                     
                     if existing_status_text != new_status_text:
-                        new_status_value = status_mapping[new_status_text]
-                        # print(f"Attempting to change item {matching_item['item_id']} with value {new_status_value}") # Debug print
-                        monday_data.change_item_value(new_board_id, matching_item['item_id'], column, new_status_value)
-                        
+                        monday_data.change_item_value(new_board_id, matching_item['item_id'], column, row[column]['value'])
                         print(f"value {row['text2']} changed in {column} from {existing_status_text} to {new_status_text}. Values changed: {count}.")
                         count += 1
                 else:

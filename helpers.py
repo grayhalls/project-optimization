@@ -118,8 +118,11 @@ def remaining_fund(remaining_by_facility):
     return fund_leftovers
 
 def categorize_projects(df, pending_statuses):
+    # Initial categorization based on 'Status'
     df['project_category'] = df['Status'].apply(lambda x: 'pending' if x in pending_statuses else 'in_process')
+    
+    # Overwrite 'project_category' for rows where 'Priority' is 'EMERGENCY'
+    df.loc[df['Priority'] == 'EMERGENCY', 'project_category'] = 'in_process'
+    
     return df
-
-def 
 
