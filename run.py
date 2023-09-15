@@ -24,6 +24,7 @@ start = time.time()
 create_missing_items(proc_completed, proc_df_in_process, proc_open_df, existing_items)
 print('create_missing_items() took', round((time.time()-start)/60,2), 'minutes.')
 
+existing_items = find_existing_rows() #removed this after fixing status for new projects
 start = time.time()
 print('Updating In Process Items')
 update_existing_data(proc_df_in_process, existing_items)

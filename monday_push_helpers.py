@@ -48,7 +48,8 @@ status_mapping = {
     'Medium': {'text': 'Medium', 'value': {"index": 1}},
     'Low': {'text': 'Low', 'value': {"index": 0}},
     'EMERGENCY': {'text': 'EMERGENCY', 'value': {"index": 2}},
-    'Escalation': {'text': 'Escalation', 'value': {"index": 3}}
+    # 'Escalation': {'text': 'Escalation', 'value': {"index": 3}},
+    '':{'text':'', 'value': {"index":5}}
 }
 
 facilities = run_sql_query(facilities_sql)
@@ -297,7 +298,10 @@ def update_existing_data(preprocessed_df, existing_items):
                     existing_status_text = matching_item[column]
                     new_status_text = row[column]['text']
                     if existing_status_text != new_status_text:
-                        value = row[column]['value']['value']
+                        if row[column]['value'] == {}:
+                            value = status_mapping['']
+                        else:
+                            value = row[column]['value']['value']
                         monday_data.change_item_value(new_board_id, matching_item['item_id'], column, value)
                         print(f"value {row['text2']} changed in {column} from {existing_status_text} to {new_status_text}. Values changed: {count}.")
                         count += 1
