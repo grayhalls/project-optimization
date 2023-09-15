@@ -116,7 +116,7 @@ class Monday:
         df.loc[:,'RD'] = df['RD'].replace("", np.nan)
         df['RD'] = df['RD'].fillna(df['facility'])
         if board == self.board_id:
-            df = df[['region','id', 'RD', 'Task Type', 'Project Type', 'Sub Project Type', 'Quantity','item_name', 'Priority', 'Status', 'PC', 'RL Link', 'Open', 'Scheduled', 'Estimated Cost', 'Quoted Cost', 'Deposit Date','Deposit Amount','Final Cost']]
+            df = df[['region','id', 'RD', 'Task Type', 'Project Type', 'Sub Project Type', 'Quantity','item_name', 'Priority', 'Status', 'PC', 'RL Link', 'Open', 'Scheduled', 'Estimated Cost', 'Quoted Cost', 'Final Cost']]
             df.loc[:, 'Open'] = pd.to_datetime(df['Open']).dt.date
         elif board == self.opc_board_id:
             df = df[['region','id', 'RD', 'Task Type', 'Project Type', 'Sub Project Type', 'Quantity','item_name', 'Priority', 'Open', 'Status', 'People', 'RL Link', 'Scheduled', 'Estimated Cost', 'Quoted Cost', 'Final Cost', 'Completion Date']]

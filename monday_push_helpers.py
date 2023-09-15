@@ -56,6 +56,14 @@ status_mapping = {
     'Escalation': {"index": 3},
     '':{"index":0}
 }
+opc_budget_mapping = {
+    'Landscape': 'Landscaping and Snow Removal',
+    'Signage': 'Supplies',
+    'Plumbing': 'R&M',
+    'Paint': 'R&M',
+    'Pest control': 'Cleaning and Sanitation',
+    'Hauling': 'Cleaning and Sanitation'
+}
 
 facilities = run_sql_query(facilities_sql)
 
@@ -127,12 +135,16 @@ def add_cumulative_budget_columns(df):
     })
 
 def calc_and_sort():
-    completed_df, open_df, opc_open, opc_completed, hauling = fetch_data()
+    completed_df, open_df, opc_open, opc_completed = fetch_data()
     assert not completed_df.empty, "The completed_df dataframe is empty."
     assert not open_df.empty, "The open_df dataframe is empty."
     
     open_df = categorize_projects(open_df, pending_statuses)
     opc_open = categorize_projects(opc_open, pending_statuses_opc)
+    
+    opc_open['Line Item'] = opc_open['Project Type'].map(opc_budget_mapping).fillna(opc_open['Project Type'])
+    opc_completed['Line Item'] = opc_completed['Project Type'].map(opc_budget_mapping).fillna(opc_completed['Project Type'])
+    opc_open = opc_open.rename(columns = {'People': 'PC'})
     
     df_in_process, df_pending = split_data(open_df)
     opc_in_process, opc_pending = split_data(opc_open)
@@ -155,7 +167,7 @@ def calc_and_sort():
     cipc_pending = calc_cost_effectiveness(df_pending)
 
     #concat pending and in_process dfs separately
-    df_in_process = pd.concat([cipc_in_process, opc_in])
+    df_in_process = pd.concat([cipc_in_process, opc_in_process])
 
     df_in_process = process_dataframes(df_in_process, completed_budgets)
     open_df = process_dataframes(df_pending, expected_budgets)

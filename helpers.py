@@ -84,6 +84,7 @@ def grab_budgets(facilities):
     
     return merge 
 
+# for r&m and capex budgets
 def remaining_facility(completed, facilities):
     budget = grab_budgets(facilities)
     budget = budget.loc[budget.index.repeat(2)].reset_index(drop=True)
